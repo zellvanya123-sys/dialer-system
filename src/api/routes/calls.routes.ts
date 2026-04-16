@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getDialer } from '../../core/dialer/dialer.module.js';
-import { handleCallResult, scheduleAllDueCalls } from '../../core/scheduler/scheduler.service.js';
+import { handleCallResult, scheduleAllDueCalls, enableAutoDial, disableAutoDial, getAutoDialStatus, onCallCompleted } from '../../core/scheduler/scheduler.service.js';
 import { ContactRepository } from '../../core/contacts/contact.repository.js';
 import { ContactStatus, CallResult } from '../../core/contacts/contact.model.js';
 import { sendLeadNotification, sendCallNotification } from '../../integrations/telegram/telegram.service.js';
@@ -93,4 +93,23 @@ callsRouter.get('/stats', async (req: Request, res: Response) => {
     logger.error(`Error getting stats: ${error.message}`);
     res.status(500).json({ error: error.message });
   }
+});
+
+callsRouter.post('/auto/enable', async (req: Request, res: Response) => {
+  enableAutoDial();
+  res.json({ success: true });
+});
+
+callsRouter.post('/auto/disable', async (req: Request, res: Response) => {
+  disableAutoDial();
+  res.json({ success: true });
+});
+
+callsRouter.get('/auto/status', async (req: Request, res: Response) => {
+  res.json(getAutoDialStatus());
+});
+
+callsRouter.post('/completed/:contactId', async (req: Request, res: Response) => {
+  onCallCompleted();
+  res.json({ success: true });
 });

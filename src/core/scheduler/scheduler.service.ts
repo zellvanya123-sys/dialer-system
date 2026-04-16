@@ -1,15 +1,39 @@
 import { Contact, ContactStatus, CallResult } from '../contacts/contact.model.js';
 import { ContactRepository } from '../contacts/contact.repository.js';
 import { getNextCallTime, RETRY_STRATEGIES, shouldCallContact } from './retry-strategies.js';
+import { getDialer } from '../dialer/dialer.module.js';
+import { isWithinWorkingHours } from './timezone.js';
 import logger from '../../utils/logger.js';
 
 let callSchedulerInterval: NodeJS.Timeout | null = null;
+let isAutoDialEnabled = false;
+let activeCalls = 0;
+const MAX_CONCURRENT_CALLS = 3;
+
+export function enableAutoDial() {
+  isAutoDialEnabled = true;
+  logger.info('Auto-dial enabled');
+}
+
+export function disableAutoDial() {
+  isAutoDialEnabled = false;
+  logger.info('Auto-dial disabled');
+}
+
+export function getAutoDialStatus() {
+  return {
+    enabled: isAutoDialEnabled,
+    activeCalls,
+  };
+}
 
 export async function startScheduler(): Promise<void> {
   if (callSchedulerInterval) return;
   
   callSchedulerInterval = setInterval(async () => {
-    await processDueCalls();
+    if (isAutoDialEnabled) {
+      await processDueCalls();
+    }
   }, 30000);
   
   logger.info('Scheduler started');
@@ -24,14 +48,33 @@ export async function stopScheduler(): Promise<void> {
 }
 
 async function processDueCalls(): Promise<void> {
-  const contacts = ContactRepository.findDueForCall();
+  if (!isAutoDialEnabled) return;
+  if (activeCalls >= MAX_CONCURRENT_CALLS) return;
   
-  for (const contact of contacts) {
+  const now = new Date();
+  if (!isWithinWorkingHours(now, 'UTC')) {
+    logger.info('Outside working hours, skipping');
+    return;
+  }
+  
+  const contacts = ContactRepository.findDueForCall();
+  const contactsToCall = contacts.slice(0, MAX_CONCURRENT_CALLS - activeCalls);
+  
+  for (const contact of contactsToCall) {
+    if (activeCalls >= MAX_CONCURRENT_CALLS) break;
+    
     if (shouldCallContact(contact)) {
       try {
-        logger.info(`Processing call for contact: ${contact.name} (${contact.phone})`);
+        logger.info(`Auto-dialing contact: ${contact.name} (${contact.phone})`);
+        const dialer = getDialer();
+        await dialer.makeCall(contact.id);
+        activeCalls++;
+        ContactRepository.update(contact.id, {
+          lastCallAt: new Date().toISOString(),
+          status: ContactStatus.CALL_1,
+        });
       } catch (error: any) {
-        logger.error(`Error processing call: ${error.message}`);
+        logger.error(`Error auto-dialing: ${error.message}`);
       }
     }
   }
@@ -107,4 +150,10 @@ export async function handleCallResult(
   });
   
   logger.info(`Contact ${contactId} marked as REJECT: ${result}`);
+}
+
+export function onCallCompleted() {
+  if (activeCalls > 0) {
+    activeCalls--;
+  }
 }

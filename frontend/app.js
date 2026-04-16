@@ -94,7 +94,10 @@ function renderContacts() {
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
           <div class="card-title">Список контактов</div>
-          <button class="btn btn-primary" onclick="showAddContactModal()">+ Добавить</button>
+          <div style="display:flex;gap:12px">
+            <button class="btn" onclick="showUploadModal()">📁 Загрузить CSV</button>
+            <button class="btn btn-primary" onclick="showAddContactModal()">+ Добавить</button>
+          </div>
         </div>
         <table class="table">
           <thead>
@@ -203,7 +206,8 @@ function renderCalls() {
     <div class="card">
       <div class="card-title">Звонки</div>
       <div style="display:flex;gap:12px;margin-bottom:20px">
-        <button class="btn btn-primary" onclick="triggerAllCalls()">Запустить все</button>
+        <button class="btn btn-primary" id="auto-dial-btn" onclick="toggleAutoDial()">▶ Запустить авто-дозвон</button>
+        <button class="btn" onclick="triggerAllCalls()">📋 Запустить все</button>
       </div>
       <table class="table">
         <thead>
@@ -281,6 +285,77 @@ function renderSettings() {
 
 async function saveSettings() {
   alert('Настройки сохранены в .env файле');
+}
+
+function showUploadModal() {
+  document.getElementById('content').innerHTML += `
+    <div class="modal active" id="upload-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Загрузить контакты из CSV</h2>
+          <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <form onsubmit="uploadCSV(event)">
+          <div class="form-group">
+            <label class="form-label">Файл CSV</label>
+            <input type="file" name="file" class="form-input" accept=".csv" required>
+          </div>
+          <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px">
+            В CSV должны быть колонки: name, phone, email (опционально)
+          </p>
+          <div class="actions">
+            <button type="submit" class="btn btn-primary">Загрузить</button>
+            <button type="button" class="btn" onclick="closeModal()">Отмена</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+async function uploadCSV(e) {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  try {
+    const res = await fetch(`${API}/upload/csv`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert(`Загружено ${data.imported} контактов`);
+      closeModal();
+      renderContacts();
+    } else {
+      alert('Ошибка: ' + data.error);
+    }
+  } catch (err) {
+    alert('Ошибка загрузки');
+  }
+}
+
+let autoDialEnabled = false;
+
+async function toggleAutoDial() {
+  const endpoint = autoDialEnabled ? '/calls/auto/disable' : '/calls/auto/enable';
+  await request(endpoint, { method: 'POST' });
+  autoDialEnabled = !autoDialEnabled;
+  updateAutoDialButton();
+}
+
+function updateAutoDialButton() {
+  const btn = document.getElementById('auto-dial-btn');
+  if (btn) {
+    btn.textContent = autoDialEnabled ? '⏹ Остановить авто-дозвон' : '▶ Запустить авто-дозвон';
+    btn.classList.toggle('btn-danger', autoDialEnabled);
+    btn.classList.toggle('btn-primary', !autoDialEnabled);
+  }
+}
+
+async function checkAutoDialStatus() {
+  const status = await request('/calls/auto/status');
+  autoDialEnabled = status.enabled;
+  updateAutoDialButton();
 }
 
 function updateTime() {
