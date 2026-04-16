@@ -15,10 +15,10 @@ export const config = {
     port: parseInt(process.env.REDIS_PORT || '6379'),
   },
 
-  twilio: {
-    accountSid: process.env.TWILIO_ACCOUNT_SID,
-    authToken: process.env.TWILIO_AUTH_TOKEN,
-    phoneNumber: process.env.TWILIO_PHONE_NUMBER,
+  sipuni: {
+    user: process.env.SIPUNI_USER,
+    secret: process.env.SIPUNI_SECRET,
+    sipNumber: process.env.SIPUNI_SIP_NUMBER,
   },
 
   telegram: {

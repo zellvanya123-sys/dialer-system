@@ -57,7 +57,10 @@ export async function sendCallNotification(contact: {
     'lead': '🎯',
     'reject': '❌',
     'no_answer': '📞',
-    'no_answer': '🤝'
+    'call1': '🔄',
+    'call2': '🔄',
+    'call3': '🔄',
+    'dont_call': '🚫',
   };
 
   const message = `${statusEmoji[contact.status] || '📱'} *Звонок завершен*

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { ContactRepository } from '../../core/contacts/contact.repository.js';
 import { Contact, ContactStatus } from '../../core/contacts/contact.model.js';
 import { resolveTimezone, resolveCountry, formatPhoneForCall } from '../../core/scheduler/timezone.js';
-import { validateContact } from './validation.js';
+import { validateContact } from '../middleware/validation.js';
 import logger from '../../utils/logger.js';
 
 export const contactsRouter = Router();
@@ -10,7 +10,12 @@ export const contactsRouter = Router();
 contactsRouter.post('/', async (req: Request, res: Response) => {
   try {
     const data = req.body;
-    
+
+    const validation = validateContact(data);
+    if (!validation.success) {
+      return res.status(400).json({ error: validation.error });
+    }
+
     const timezone = resolveTimezone(data.phone, data.country);
     const country = resolveCountry(data.phone);
     const phone = formatPhoneForCall(data.phone);

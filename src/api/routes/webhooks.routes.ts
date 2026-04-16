@@ -1,74 +1,101 @@
 import { Router, Request, Response } from 'express';
-import { getDialer } from '../../core/dialer/dialer.module.js';
 import { handleCallResult } from '../../core/scheduler/scheduler.service.js';
 import { ContactRepository } from '../../core/contacts/contact.repository.js';
-import { CallResult, ContactStatus } from '../../core/contacts/contact.model.js';
+import { CallResult } from '../../core/contacts/contact.model.js';
+import { formatPhoneForCall } from '../../core/scheduler/timezone.js';
 import logger from '../../utils/logger.js';
 
 export const webhooksRouter = Router();
 
-webhooksRouter.post('/twilio-status', async (req: Request, res: Response) => {
-  try {
-    const { CallStatus, CallSid, CallDuration, Digits } = req.body;
-    
-    logger.info(`Twilio status: ${CallStatus}, SID: ${CallSid}`);
-    
-    if (CallStatus === 'completed') {
-      const duration = parseInt(CallDuration) || 0;
-      
-      let result: CallResult;
-      if (duration > 0) {
-        result = CallResult.ANSWERED;
-      } else {
-        result = CallResult.NO_ANSWER;
-      }
-      
-      const contacts = ContactRepository.findAll();
-      const contact = contacts.find(c => c.lastCallAt);
-      
-      if (contact) {
-        await handleCallResult(contact.id, result);
-      }
-    }
+function findContactByPhone(phone: string) {
+  const clean = phone.replace(/\D/g, '');
+  const normalized = formatPhoneForCall(phone);
+  const all = ContactRepository.findAll();
+  return all.find(c => {
+    const contactClean = c.phone.replace(/\D/g, '');
+    const contactNorm = formatPhoneForCall(c.phone);
+    return contactNorm === normalized || contactClean === clean;
+  }) || null;
+}
 
-    res.status(200).send('<Response></Response>');
-  } catch (error: any) {
-    logger.error(`Webhook error: ${error.message}`);
-    res.status(500).send('<Response></Response>');
+function mapSipuniStatus(status: string, duration: number): CallResult {
+  switch (status?.toUpperCase()) {
+    case 'ANSWER':
+      return duration > 0 ? CallResult.ANSWERED : CallResult.HANGUP;
+    case 'BUSY':
+      return CallResult.BUSY;
+    case 'NOANSWER':
+      return CallResult.NO_ANSWER;
+    case 'CANCEL':
+      return CallResult.HANGUP;
+    case 'CONGESTION':
+      return CallResult.CONGESTED;
+    case 'CHANUNAVAIL':
+      return CallResult.NO_ANSWER;
+    default:
+      return CallResult.NO_ANSWER;
   }
-});
+}
 
-webhooksRouter.post('/twilio-call-status', async (req: Request, res: Response) => {
+/**
+ * Sipuni HTTP API webhook
+ * event=1 — начало звонка
+ * event=2 — завершение звонка (hang up)
+ *
+ * Параметры: event, call_id, src_num, dst_num, src_type, dst_type,
+ * timestamp, call_start_timestamp, call_answer_timestamp, status, duration
+ */
+webhooksRouter.post('/sipuni', async (req: Request, res: Response) => {
   try {
-    const { CallStatus, CallSid, CallDuration, ContactookCallStatus } = req.body;
-    
-    logger.info(`Call status update: ${CallStatus}, SID: ${CallSid}`);
-    
-    res.status(200).send('<Response></Response>');
-  } catch (error: any) {
-    logger.error(`Webhook error: ${error.message}`);
-    res.status(500).send('<Response></Response>');
-  }
-});
+    const {
+      event,
+      call_id,
+      src_num,
+      dst_num,
+      status,
+      timestamp,
+      call_start_timestamp,
+      call_answer_timestamp,
+    } = req.body;
 
-webhooksRouter.post('/zadarma', async (req: Request, res: Response) => {
-  try {
-    const { event, call_id, number } = req.body;
-    
-    logger.info(`Zadarma event: ${event}, call_id: ${call_id}`);
-    
-    if (event === 'call_end') {
-      const contacts = ContactRepository.findAll();
-      const contact = contacts.find(c => c.phone.includes(number));
-      
-      if (contact) {
-        await handleCallResult(contact.id, CallResult.ANSWERED);
+    logger.info(`Sipuni webhook: event=${event}, call_id=${call_id}, src=${src_num}, dst=${dst_num}, status=${status}`);
+
+    if (String(event) === '2') {
+      const phone = dst_num || src_num;
+      if (!phone) {
+        logger.warn('Sipuni webhook: no phone number');
+        return res.json({ success: true });
       }
+
+      const contact = findContactByPhone(phone);
+      if (!contact) {
+        logger.warn(`Sipuni webhook: contact not found for ${phone}`);
+        return res.json({ success: true });
+      }
+
+      const startTs = parseInt(call_start_timestamp) || 0;
+      const answerTs = parseInt(call_answer_timestamp) || 0;
+      const endTs = parseInt(timestamp) || 0;
+
+      let callDuration = 0;
+      if (answerTs > 0 && endTs > 0) {
+        callDuration = endTs - answerTs;
+      }
+
+      const callResult = mapSipuniStatus(status, callDuration);
+
+      await handleCallResult(contact.id, callResult);
+
+      ContactRepository.update(contact.id, {
+        lastCallDuration: callDuration,
+      });
+
+      logger.info(`Sipuni: processed call for ${contact.name} (${phone}), status=${status}, result=${callResult}, duration=${callDuration}s`);
     }
 
     res.json({ success: true });
   } catch (error: any) {
-    logger.error(`Zadarma webhook error: ${error.message}`);
+    logger.error(`Sipuni webhook error: ${error.message}`);
     res.status(500).json({ error: error.message });
   }
 });

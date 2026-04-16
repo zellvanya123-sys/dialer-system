@@ -25,12 +25,11 @@ const countryTimezoneMap: Record<string, string> = {
 };
 
 const phonePrefixMap: Record<string, string> = {
+  '+77': 'KZ',
   '+7': 'RU',
   '8': 'RU',
   '+380': 'UA',
   '+375': 'BY',
-  '+7': 'RU',
-  '+77': 'KZ',
   '+998': 'UZ',
   '+994': 'AZ',
   '+374': 'AM',
@@ -46,8 +45,11 @@ export function resolveTimezone(phone: string, country?: string): string {
   }
 
   const cleanPhone = phone.replace(/\D/g, '');
-  
-  for (const [prefix, countryCode] of Object.entries(phonePrefixMap)) {
+
+  const sortedPrefixes = Object.entries(phonePrefixMap)
+    .sort((a, b) => b[0].length - a[0].length);
+
+  for (const [prefix, countryCode] of sortedPrefixes) {
     const prefixClean = prefix.replace('+', '');
     if (cleanPhone.startsWith(prefixClean)) {
       if (countryTimezoneMap[countryCode]) {

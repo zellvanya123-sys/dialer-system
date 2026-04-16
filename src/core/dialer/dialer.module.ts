@@ -1,25 +1,38 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import { Contact, CallResult, CallLog } from '../contacts/contact.model.js';
 import { ContactRepository } from '../contacts/contact.repository.js';
 import { formatPhoneForCall } from '../scheduler/timezone.js';
+import { config } from '../../config/index.js';
 import logger from '../../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface DialerConfig {
-  provider: 'ringostat';
+  provider: 'sipuni';
 }
 
-class RingostatDialer {
-  private apiKey: string;
-  private phone: string;
+class SipuniDialer {
+  private user: string;
+  private secret: string;
+  private sipNumber: string;
 
   constructor() {
-    this.apiKey = process.env.RINGOSTAT_API_KEY || '';
-    this.phone = process.env.RINGOSTAT_PHONE || '';
-    
-    if (!this.apiKey || !this.phone) {
-      throw new Error('Ringostat credentials not configured');
+    this.user = config.sipuni.user || '';
+    this.secret = config.sipuni.secret || '';
+    this.sipNumber = config.sipuni.sipNumber || '';
+
+    if (!this.user || !this.secret || !this.sipNumber) {
+      throw new Error('Sipuni credentials not configured');
     }
+  }
+
+  private generateHash(params: Record<string, string>): string {
+    const ordered = Object.keys(params)
+      .sort()
+      .map(key => params[key]);
+    ordered.push(this.secret);
+    const hashString = ordered.join('+');
+    return crypto.createHash('md5').update(hashString).digest('hex');
   }
 
   async makeCall(contactId: string): Promise<string> {
@@ -29,49 +42,60 @@ class RingostatDialer {
     }
 
     const to = formatPhoneForCall(contact.phone);
-    
-    logger.info(`Initiating call via Ringostat to ${to}`);
+
+    logger.info(`Initiating call via Sipuni to ${to}`);
+
+    const params: Record<string, string> = {
+      antiaon: '0',
+      phone: to.replace('+', ''),
+      reverse: '0',
+      sipnumber: this.sipNumber,
+      user: this.user,
+    };
+
+    const hash = this.generateHash(params);
 
     try {
-      const response = await axios.post('https://api.ringostat.net/v2/call/make', {
-        phone_from: this.phone,
-        phone_to: to,
-        api_key: this.apiKey,
-      });
+      const response = await axios.post(
+        'https://sipuni.com/api/callback/call_number',
+        new URLSearchParams({ ...params, hash }).toString(),
+        {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        }
+      );
 
-      logger.info(`Call initiated: ${response.data.call_id}`);
-      return response.data.call_id;
+      const callId = response.data?.order_id || response.data?.call_id || uuidv4();
+      logger.info(`Call initiated: ${callId}`);
+      return callId;
     } catch (error: any) {
-      logger.error(`Ringostat API error: ${error.message}`);
+      logger.error(`Sipuni API error: ${error.message}`);
       throw error;
     }
   }
 
-  async hangup(callId: string): Promise<void> {
-    await axios.post('https://api.ringostat.net/v2/call/hangup', {
-      call_id: callId,
-      api_key: this.apiKey,
-    });
-    logger.info(`Call ended: ${callId}`);
-  }
-
   async getCallStatus(callId: string): Promise<any> {
-    const response = await axios.get(`https://api.ringostat.net/v2/call/${callId}`, {
-      params: { api_key: this.apiKey },
+    const params: Record<string, string> = {
+      call_id: callId,
+      user: this.user,
+    };
+    const hash = this.generateHash(params);
+
+    const response = await axios.get('https://sipuni.com/api/statistic/get', {
+      params: { ...params, hash },
     });
     return response.data;
   }
 }
 
-let dialer: RingostatDialer;
+let dialer: SipuniDialer;
 
-export function initDialer(provider: 'ringostat' = 'ringostat'): RingostatDialer {
-  dialer = new RingostatDialer();
+export function initDialer(provider: 'sipuni' = 'sipuni'): SipuniDialer {
+  dialer = new SipuniDialer();
   logger.info(`Dialer initialized: ${provider}`);
   return dialer;
 }
 
-export function getDialer(): RingostatDialer {
+export function getDialer(): SipuniDialer {
   if (!dialer) {
     throw new Error('Dialer not initialized. Call initDialer() first.');
   }

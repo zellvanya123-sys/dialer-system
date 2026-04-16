@@ -29,9 +29,9 @@ async function start() {
     initDatabase();
     logger.info('✓ Database initialized');
 
-    if (config.twilio.accountSid && config.twilio.authToken) {
-      initDialer('twilio');
-      logger.info('✓ Twilio dialer initialized');
+    if (config.sipuni.user && config.sipuni.secret) {
+      initDialer('sipuni');
+      logger.info('✓ Sipuni dialer initialized');
     }
 
     if (config.telegram.botToken) {
