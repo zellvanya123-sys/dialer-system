@@ -16,9 +16,26 @@ export const config = {
   },
 
   sipuni: {
+    host: process.env.SIPUNI_HOST || 'sipuni.com',
     user: process.env.SIPUNI_USER,
     secret: process.env.SIPUNI_SECRET,
     sipNumber: process.env.SIPUNI_SIP_NUMBER,
+  },
+
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY,
+    model: process.env.OPENAI_MODEL || 'gpt-4o',
+    baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+  },
+
+  yandex: {
+    sttUrl: 'https://stt.api.cloud.yandex.net/speechkit/stt/v2',
+    ttsUrl: 'https://tts.api.cloud.yandex.net/cloud/tts/v2',
+    iamToken: process.env.YANDEX_IAM_TOKEN,
+    folderId: process.env.YANDEX_FOLDER_ID,
+    voice: process.env.YANDEX_VOICE || 'oksana',
+    format: 'mp3',
+    lang: 'ru-RU',
   },
 
   telegram: {

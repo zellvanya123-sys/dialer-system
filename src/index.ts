@@ -5,6 +5,10 @@ import { config } from './config/index.js';
 import { initDatabase, ContactRepository } from './core/contacts/contact.repository.js';
 import { initDialer } from './core/dialer/dialer.module.js';
 import { initTelegramBot } from './integrations/telegram/telegram.service.js';
+import { initOpenAI } from './integrations/openai/openai.service.js';
+import { initYandexTTS } from './integrations/yandex/tts.service.js';
+import { initYandexSTT } from './integrations/yandex/stt.service.js';
+import { initAIVoice } from './core/ai-voice/ai-voice.service.js';
 import { startScheduler, stopScheduler } from './core/scheduler/scheduler.service.js';
 import { contactsRouter } from './api/routes/contacts.routes.js';
 import { callsRouter } from './api/routes/calls.routes.js';
@@ -45,6 +49,22 @@ async function start() {
     if (config.sipuni.user && config.sipuni.secret) {
       initDialer('sipuni');
       logger.info('✓ Sipuni dialer initialized');
+    }
+
+    if (config.openai.apiKey) {
+      initOpenAI();
+      logger.info('✓ OpenAI (GPT-4o) initialized');
+    }
+
+    if (config.yandex.iamToken && config.yandex.folderId) {
+      initYandexTTS();
+      initYandexSTT();
+      logger.info('✓ Yandex TTS/STT initialized');
+    }
+
+    if (config.mango.login && config.openai.apiKey && config.yandex.iamToken) {
+      initAIVoice();
+      logger.info('✓ AI Voice module initialized');
     }
 
     if (config.telegram.botToken) {
