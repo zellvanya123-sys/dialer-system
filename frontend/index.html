@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dialer System</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">📞 Dialer</div>
+      <nav class="nav">
+        <a href="#" class="nav-item active" data-page="dashboard">📊 Дашборд</a>
+        <a href="#" class="nav-item" data-page="contacts">👥 Контакты</a>
+        <a href="#" class="nav-item" data-page="calls">📞 Звонки</a>
+        <a href="#" class="nav-item" data-page="settings">⚙️ Настройки</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="header">
+        <h1 id="page-title">Дашборд</h1>
+        <div class="user-info">
+          <span id="current-time"></span>
+        </div>
+      </header>
+      <div class="content" id="content">
+        <!-- Content loaded dynamically -->
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
