@@ -1,9 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
-import { Period, PeriodData } from '../types/dashboard'
-import { mockData } from '../constants/mockData'
+import { Period } from '../types/dashboard'
 import { AgentHeader } from '../components/AgentHeader'
 import { MetricCard } from '../components/MetricCard'
 import { FunnelBar } from '../components/FunnelBar'
@@ -16,9 +15,76 @@ const periods: { key: Period; label: string }[] = [
   { key: '30days', label: '30 дней' }
 ]
 
+interface StatsData {
+  total: number
+  new: number
+  inProgress: number
+  leads: number
+  rejected: number
+  noAnswer: number
+  dueForCall: number
+  totalCalls: number
+  answeredCalls: number
+  totalDurationSec: number
+  conversionRate: number
+  leadsByQualification: { withBudget: number; withTask: number; decisionMaker: number }
+}
+
 export function Dashboard() {
   const [period, setPeriod] = useState<Period>('today')
-  const data: PeriodData = mockData[period]
+  const [stats, setStats] = useState<StatsData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/calls/stats')
+      .then(r => r.json())
+      .then(d => setStats(d))
+      .catch(() => setStats({ total: 0, new: 0, inProgress: 0, leads: 0, rejected: 0, noAnswer: 0, dueForCall: 0, totalCalls: 0, answeredCalls: 0, totalDurationSec: 0, conversionRate: 0, leadsByQualification: { withBudget: 0, withTask: 0, decisionMaker: 0 } }))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch('/api/calls/stats')
+        .then(r => r.json())
+        .then(d => setStats(d))
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
+  if (loading || !stats) return <div className="p-6">Загрузка...</div>
+
+  const reachRate = stats.totalCalls > 0 ? Math.round((stats.answeredCalls / stats.totalCalls) * 100) : 0
+  const qualRate = stats.leads > 0 && stats.totalCalls > 0 ? Math.round((stats.leads / stats.totalCalls) * 100) : 0
+  const reach = stats.total - stats.new - stats.inProgress - stats.rejected - stats.noAnswer
+  const qual = stats.leads
+  const noQual = stats.rejected + stats.noAnswer
+  const callback = stats.dueForCall
+
+  const data = {
+    metrics: {
+      loaded: stats.total,
+      reachRate,
+      qualRate,
+      escalationRate: 0
+    },
+    deltas: { loaded: 0, reachRate: 0, qualRate: 0, escalationRate: 0 },
+    chart: {
+      labels: [],
+      calls: [],
+      qual: [],
+      noQual: []
+    },
+    donut: { qual, noQual, callback },
+    funnel: [
+      { label: 'Загружено', value: stats.total },
+      { label: 'Дозвон', value: reach },
+      { label: 'Разговор', value: stats.answeredCalls },
+      { label: 'Квалифицировано', value: qual },
+      { label: 'В CRM', value: 0 }
+    ],
+    reasons: []
+  }
 
   const chartData = data.chart.labels.map((label, i) => ({
     name: label,
@@ -134,20 +200,10 @@ export function Dashboard() {
             <FunnelBar items={data.funnel} />
           </div>
 
-          {/* Reasons */}
+          {/* Reasons - пока пусто, заполнится при звонках */}
           <div className="bg-white rounded-xl shadow-sm p-4">
             <h3 className="font-semibold mb-4">Топ причин отказа</h3>
-            <div className="space-y-3">
-              {data.reasons.map((r, i) => (
-                <div key={r.name} className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-medium">
-                    {i + 1}
-                  </span>
-                  <span className="flex-1 text-gray-600">{r.name}</span>
-                  <span className="font-medium">{r.count}</span>
-                </div>
-              ))}
-            </div>
+            <p className="text-gray-400 text-sm">Нет данных пока</p>
           </div>
         </div>
       </div>
