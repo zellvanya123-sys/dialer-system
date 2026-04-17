@@ -79,14 +79,30 @@ callsRouter.post('/schedule', async (req: Request, res: Response) => {
 callsRouter.get('/stats', async (req: Request, res: Response) => {
   try {
     const all = ContactRepository.findAll();
+    
+    const totalCalls = all.reduce((sum, c) => sum + (c.attemptCount || 0), 0);
+    const answeredCalls = all.filter(c => c.lastCallResult === CallResult.ANSWERED).length;
+    const leads = all.filter(c => c.status === ContactStatus.LEAD);
+    const totalDuration = all.reduce((sum, c) => sum + (c.lastCallDuration || 0), 0);
+    
     const stats = {
       total: all.length,
       new: all.filter(c => c.status === ContactStatus.NEW).length,
       inProgress: all.filter(c => [ContactStatus.CALL_1, ContactStatus.CALL_2, ContactStatus.CALL_3].includes(c.status)).length,
-      leads: all.filter(c => c.status === ContactStatus.LEAD).length,
+      leads: leads.length,
       rejected: all.filter(c => c.status === ContactStatus.REJECT).length,
       noAnswer: all.filter(c => c.status === ContactStatus.NO_ANSWER).length,
       dueForCall: ContactRepository.findDueForCall().length,
+      totalCalls,
+      answeredCalls,
+      totalDurationSec: totalDuration,
+      conversionRate: totalCalls > 0 ? Math.round((answeredCalls / totalCalls) * 100) : 0,
+      leadsByQualification: leads.reduce<Record<string, number>>((acc, l) => {
+        if (l.qualification?.hasBudget) acc.withBudget = (acc.withBudget || 0) + 1;
+        if (l.qualification?.hasTask) acc.withTask = (acc.withTask || 0) + 1;
+        if (l.qualification?.decisionMaker === 'yes') acc.decisionMaker = (acc.decisionMaker || 0) + 1;
+        return acc;
+      }, { withBudget: 0, withTask: 0, decisionMaker: 0 }),
     };
 
     res.json(stats);
