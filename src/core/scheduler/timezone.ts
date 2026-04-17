@@ -1,3 +1,5 @@
+import { DateTime } from 'luxon';
+
 const countryTimezoneMap: Record<string, string> = {
   RU: 'Europe/Moscow',
   UA: 'Europe/Kiev',
@@ -92,4 +94,14 @@ export function formatPhoneForCall(phone: string): string {
   }
   
   return phone;
+}
+
+export function isWithinWorkingHours(timezone: string, minHour = 9, maxHour = 20): boolean {
+  try {
+    const now = DateTime.now().setZone(timezone);
+    const hour = now.hour;
+    return hour >= minHour && hour < maxHour;
+  } catch {
+    return true;
+  }
 }

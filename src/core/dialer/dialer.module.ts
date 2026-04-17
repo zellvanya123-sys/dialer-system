@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
 import crypto from 'crypto';
 import { Contact, CallResult, CallLog } from '../contacts/contact.model';
 import { ContactRepository } from '../contacts/contact.repository';
@@ -12,6 +12,7 @@ export interface DialerConfig {
 }
 
 class SipuniDialer {
+  private http: AxiosInstance;
   private user: string;
   private secret: string;
   private sipNumber: string;
@@ -26,6 +27,24 @@ class SipuniDialer {
     if (!this.user || !this.secret || !this.sipNumber) {
       throw new Error('Sipuni credentials not configured');
     }
+
+    const proxyConfig = config.proxy.https
+      ? (() => {
+          const url = new URL(config.proxy.https);
+          return {
+            protocol: 'http',
+            host: url.hostname,
+            port: parseInt(url.port || '80'),
+            auth: url.username && url.password
+              ? { username: url.username, password: url.password }
+              : undefined,
+          };
+        })()
+      : undefined;
+
+    this.http = axios.create({
+      proxy: proxyConfig,
+    });
   }
 
   private generateHash(params: Record<string, string>): string {
@@ -58,7 +77,7 @@ class SipuniDialer {
     const hash = this.generateHash(params);
 
     try {
-      const response = await axios.post(
+      const response = await this.http.post(
         `https://${this.host}/api/callback/call_number`,
         new URLSearchParams({ ...params, hash }).toString(),
         {
@@ -82,7 +101,7 @@ class SipuniDialer {
     };
     const hash = this.generateHash(params);
 
-    const response = await axios.get(`https://${this.host}/api/statistic/get`, {
+    const response = await this.http.get(`https://${this.host}/api/statistic/get`, {
       params: { ...params, hash },
     });
     return response.data;

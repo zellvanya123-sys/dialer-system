@@ -11,6 +11,28 @@
       "callCount": 0,
       "lastCallAt": "2026-04-17T13:34:51.022Z",
       "updatedAt": "2026-04-17T13:34:51.022Z"
+    },
+    {
+      "id": "2285df46-f666-4d8d-9973-8f00b2d6a65a",
+      "phone": "+79001234567",
+      "name": "Test User",
+      "timezone": "Europe/Moscow",
+      "country": "RU",
+      "status": "new",
+      "attemptCount": 0,
+      "createdAt": "2026-04-17T15:12:37.481Z",
+      "updatedAt": "2026-04-17T15:12:37.481Z"
+    },
+    {
+      "id": "04dcb3d5-8dc4-49a3-88fc-6a4730b0832c",
+      "phone": "+79001234567",
+      "name": "Test User",
+      "timezone": "Europe/Moscow",
+      "country": "RU",
+      "status": "new",
+      "attemptCount": 0,
+      "createdAt": "2026-04-17T15:13:57.345Z",
+      "updatedAt": "2026-04-17T15:13:57.345Z"
     }
   ],
   "callLogs": []

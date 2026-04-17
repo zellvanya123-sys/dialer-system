@@ -70,4 +70,9 @@ export const config = {
     maxTurns: parseInt(process.env.AI_MAX_TURNS || '10'),
     timeoutMs: parseInt(process.env.AI_TIMEOUT_MS || '30000'),
   },
+
+  proxy: {
+    http: process.env.HTTP_PROXY,
+    https: process.env.HTTPS_PROXY,
+  },
 };

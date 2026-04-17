@@ -51,8 +51,7 @@ async function processDueCalls(): Promise<void> {
   if (!isAutoDialEnabled) return;
   if (activeCalls >= MAX_CONCURRENT_CALLS) return;
   
-  const now = new Date();
-  if (!isWithinWorkingHours(now, 'UTC')) {
+  if (!isWithinWorkingHours('UTC')) {
     logger.info('Outside working hours, skipping');
     return;
   }

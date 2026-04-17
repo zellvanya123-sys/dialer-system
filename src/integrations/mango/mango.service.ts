@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { config } from '../../config/index';
 import logger from '../../utils/logger';
-import { formatPhoneForCall } from '../scheduler/timezone';
+import { formatPhoneForCall } from '../../core/scheduler/timezone';
 
 interface MangoCallOptions {
   phone: string;
@@ -47,7 +47,7 @@ class MangoSIPService {
       const response = await axios.post(
         `https://${this.host}/api/v1/calls`,
         {
-          from': callerId,
+          'from': callerId,
           to,
           webhook_url: options.webhookUrl || '',
         },

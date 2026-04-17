@@ -170,7 +170,7 @@ class AIVoiceService {
     if (contact) {
       ContactRepository.update(session.contactId, {
         lastCallAt: session.startTime,
-        callCount: (contact.callCount || 0) + 1,
+        attemptCount: (contact.attemptCount || 0) + 1,
       });
     }
 

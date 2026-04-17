@@ -1,6 +1,7 @@
 {
   "name": "dialer-system",
   "version": "1.0.0",
+  "type": "module",
   "description": "Авто-колл-воронка для call-центра",
   "main": "dist/index.js",
   "scripts": {
@@ -9,27 +10,28 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "dotenv": "^16.3.1",
-    "twilio": "^4.21.0",
-    "node-telegram-bot-api": "^0.64.0",
-    "googleapis": "^131.0.0",
-    "zod": "^3.22.4",
-    "uuid": "^9.0.1",
-    "luxon": "^3.4.4",
-    "winston": "^3.11.0",
     "axios": "^1.6.7",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "form-data": "^4.0.0",
+    "googleapis": "^131.0.0",
+    "luxon": "^3.4.4",
     "multer": "^1.4.5-lts.1",
+    "node-telegram-bot-api": "^0.64.0",
     "openai": "^4.28.0",
-    "form-data": "^4.0.0"
+    "twilio": "^4.21.0",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "typescript": "^5.3.3",
-    "tsx": "^4.7.0",
-    "@types/node": "^20.11.0",
     "@types/express": "^4.17.21",
-    "@types/uuid": "^9.0.7",
+    "@types/luxon": "^3.7.1",
+    "@types/multer": "^1.4.11",
+    "@types/node": "^20.11.0",
     "@types/node-telegram-bot-api": "^0.64.0",
-    "@types/multer": "^1.4.11"
+    "@types/uuid": "^9.0.7",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
   }
 }
