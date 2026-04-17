@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { config } from '../../config/index.js';
-import logger from '../../utils/logger.js';
+import { config } from '../../config/index';
+import logger from '../../utils/logger';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -17,18 +17,21 @@ interface TTSOptions {
 }
 
 class YandexTTSService {
-  private iamToken: string;
+  private apiKey: string;
   private folderId: string;
   private voice: string;
   private format: string;
   private lang: string;
 
   constructor() {
-    if (!config.yandex.iamToken || !config.yandex.folderId) {
-      throw new Error('Yandex IAM token or Folder ID not configured');
+    if (!config.yandex.apiKey && !config.yandex.iamToken) {
+      throw new Error('Yandex API key or IAM token not configured');
+    }
+    if (!config.yandex.folderId) {
+      throw new Error('Yandex Folder ID not configured');
     }
 
-    this.iamToken = config.yandex.iamToken;
+    this.apiKey = config.yandex.apiKey || config.yandex.iamToken!;
     this.folderId = config.yandex.folderId;
     this.voice = config.yandex.voice || 'oksana';
     this.format = config.yandex.format || 'mp3';
@@ -36,17 +39,7 @@ class YandexTTSService {
     logger.info(`Yandex TTS initialized with voice: ${this.voice}`);
   }
 
-  private async refreshToken(): Promise<void> {
-    const iamToken = process.env.YANDEX_IAM_TOKEN;
-    if (iamToken && iamToken !== this.iamToken) {
-      this.iamToken = iamToken;
-      logger.info('Yandex IAM token refreshed');
-    }
-  }
-
   async synthesize(options: TTSOptions): Promise<Buffer> {
-    await this.refreshToken();
-
     const text = options.text;
     const voice = options.voice || this.voice;
     const speed = options.speed ?? 1.0;
@@ -69,7 +62,7 @@ class YandexTTSService {
         requestBody,
         {
           headers: {
-            'Authorization': `Bearer ${this.iamToken}`,
+            'Authorization': `Api-Key ${this.apiKey}`,
             'Content-Type': 'application/json',
           },
           responseType: 'arraybuffer',

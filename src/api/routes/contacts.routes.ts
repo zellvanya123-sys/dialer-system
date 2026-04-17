@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { ContactRepository } from '../../core/contacts/contact.repository.js';
-import { Contact, ContactStatus } from '../../core/contacts/contact.model.js';
-import { resolveTimezone, resolveCountry, formatPhoneForCall } from '../../core/scheduler/timezone.js';
-import { validateContact } from '../middleware/validation.js';
-import logger from '../../utils/logger.js';
+import { ContactRepository } from '../../core/contacts/contact.repository';
+import { Contact, ContactStatus } from '../../core/contacts/contact.model';
+import { resolveTimezone, resolveCountry, formatPhoneForCall } from '../../core/scheduler/timezone';
+import { validateContact } from '../middleware/validation';
+import logger from '../../utils/logger';
 
 export const contactsRouter = Router();
 

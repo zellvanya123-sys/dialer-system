@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { Contact, ContactStatus, CallResult } from './contact.model.js';
-import logger from '../../utils/logger.js';
+import { Contact, ContactStatus, CallResult } from './contact.model';
+import logger from '../../utils/logger';
 
 const DB_FILE = './data/contacts.json';
 

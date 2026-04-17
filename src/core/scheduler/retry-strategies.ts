@@ -1,4 +1,4 @@
-import { ContactStatus } from '../contacts/contact.model.js';
+import { ContactStatus } from '../contacts/contact.model';
 
 export interface RetryStrategy {
   name: string;

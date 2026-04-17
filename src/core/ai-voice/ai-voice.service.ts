@@ -1,10 +1,10 @@
-import { getOpenAI } from '../openai/openai.service.js';
-import { getYandexTTS } from '../yandex/tts.service.js';
-import { getYandexSTT } from '../yandex/stt.service.js';
-import { getDialer } from '../dialer/dialer.module.js';
-import { Contact, CallResult } from '../contacts/contact.model.js';
-import { ContactRepository } from '../contacts/contact.repository.js';
-import logger from '../../utils/logger.js';
+import { getOpenAI } from '../../integrations/openai/openai.service';
+import { getYandexTTS } from '../../integrations/yandex/tts.service';
+import { getYandexSTT } from '../../integrations/yandex/stt.service';
+import { getDialer } from '../dialer/dialer.module';
+import { Contact, CallResult } from '../contacts/contact.model';
+import { ContactRepository } from '../contacts/contact.repository';
+import logger from '../../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';

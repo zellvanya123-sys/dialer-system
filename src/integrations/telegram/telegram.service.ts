@@ -1,6 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
-import { config } from '../../config/index.js';
-import logger from '../../utils/logger.js';
+import { config } from '../../config/index';
+import logger from '../../utils/logger';
 
 let bot: TelegramBot | null = null;
 

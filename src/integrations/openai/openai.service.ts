@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
-import { config } from '../../config/index.js';
-import logger from '../../utils/logger.js';
+import { config } from '../../config/index';
+import logger from '../../utils/logger';
 
 class OpenAIService {
   private client: OpenAI;

@@ -1,10 +1,10 @@
 import axios from 'axios';
 import crypto from 'crypto';
-import { Contact, CallResult, CallLog } from '../contacts/contact.model.js';
-import { ContactRepository } from '../contacts/contact.repository.js';
-import { formatPhoneForCall } from '../scheduler/timezone.js';
-import { config } from '../../config/index.js';
-import logger from '../../utils/logger.js';
+import { Contact, CallResult, CallLog } from '../contacts/contact.model';
+import { ContactRepository } from '../contacts/contact.repository';
+import { formatPhoneForCall } from '../scheduler/timezone';
+import { config } from '../../config/index';
+import logger from '../../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface DialerConfig {

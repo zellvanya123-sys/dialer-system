@@ -1,7 +1,7 @@
 import axios from 'axios';
 import FormData from 'form-data';
-import { config } from '../../config/index.js';
-import logger from '../../utils/logger.js';
+import { config } from '../../config/index';
+import logger from '../../utils/logger';
 import fs from 'fs';
 
 interface STTOptions {
@@ -16,31 +16,25 @@ interface STTResult {
 }
 
 class YandexSTTService {
-  private iamToken: string;
+  private apiKey: string;
   private folderId: string;
   private sttUrl: string;
 
   constructor() {
-    if (!config.yandex.iamToken || !config.yandex.folderId) {
-      throw new Error('Yandex IAM token or Folder ID not configured');
+    if (!config.yandex.apiKey && !config.yandex.iamToken) {
+      throw new Error('Yandex API key or IAM token not configured');
+    }
+    if (!config.yandex.folderId) {
+      throw new Error('Yandex Folder ID not configured');
     }
 
-    this.iamToken = config.yandex.iamToken;
+    this.apiKey = config.yandex.apiKey || config.yandex.iamToken!;
     this.folderId = config.yandex.folderId;
     this.sttUrl = config.yandex.sttUrl;
     logger.info('Yandex STT initialized');
   }
 
-  private async refreshToken(): Promise<void> {
-    const iamToken = process.env.YANDEX_IAM_TOKEN;
-    if (iamToken && iamToken !== this.iamToken) {
-      this.iamToken = iamToken;
-      logger.info('Yandex IAM token refreshed');
-    }
-  }
-
   async recognize(options: STTOptions): Promise<STTResult> {
-    await this.refreshToken();
 
     const format = options.format || 'mp3';
     const sampleRate = options.sampleRate || 48000;
@@ -70,7 +64,7 @@ class YandexSTTService {
         form,
         {
           headers: {
-            'Authorization': `Bearer ${this.iamToken}`,
+            'Authorization': `Api-Key ${this.apiKey}`,
             ...form.getHeaders(),
           },
         }

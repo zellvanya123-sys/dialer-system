@@ -32,10 +32,18 @@ export const config = {
     sttUrl: 'https://stt.api.cloud.yandex.net/speechkit/stt/v2',
     ttsUrl: 'https://tts.api.cloud.yandex.net/cloud/tts/v2',
     iamToken: process.env.YANDEX_IAM_TOKEN,
+    apiKey: process.env.YANDEX_API_KEY,
     folderId: process.env.YANDEX_FOLDER_ID,
     voice: process.env.YANDEX_VOICE || 'oksana',
     format: 'mp3',
     lang: 'ru-RU',
+  },
+
+  mango: {
+    host: process.env.MANGO_HOST || 'gw1.mangosip.ru',
+    login: process.env.MANGO_LOGIN,
+    password: process.env.MANGO_PASSWORD,
+    sipNumber: process.env.MANGO_SIP_NUMBER,
   },
 
   telegram: {
@@ -54,5 +62,12 @@ export const config = {
     minHour: 9,
     maxHour: 20,
     maxAttempts: 4,
+  },
+
+  aiVoice: {
+    systemPrompt: process.env.AI_SYSTEM_PROMPT || 'Ты вежливый менеджер по продажам. Ты звонишь клиенту с предложением услуги. Отвечай кратко и по делу. Не упоминай что ты AI.',
+    welcomeMessage: process.env.AI_WELCOME_MESSAGE || 'Здравствуйте! Это компания XYZ. У нас для вас есть интересное предложение. У вас есть минута?',
+    maxTurns: parseInt(process.env.AI_MAX_TURNS || '10'),
+    timeoutMs: parseInt(process.env.AI_TIMEOUT_MS || '30000'),
   },
 };

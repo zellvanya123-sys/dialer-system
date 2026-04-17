@@ -1,7 +1,7 @@
 import axios from 'axios';
-import { config } from '../../config/index.js';
-import logger from '../../utils/logger.js';
-import { formatPhoneForCall } from '../scheduler/timezone.js';
+import { config } from '../../config/index';
+import logger from '../../utils/logger';
+import { formatPhoneForCall } from '../scheduler/timezone';
 
 interface MangoCallOptions {
   phone: string;

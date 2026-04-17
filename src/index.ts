@@ -1,20 +1,20 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { config } from './config/index.js';
-import { initDatabase, ContactRepository } from './core/contacts/contact.repository.js';
-import { initDialer } from './core/dialer/dialer.module.js';
-import { initTelegramBot } from './integrations/telegram/telegram.service.js';
-import { initOpenAI } from './integrations/openai/openai.service.js';
-import { initYandexTTS } from './integrations/yandex/tts.service.js';
-import { initYandexSTT } from './integrations/yandex/stt.service.js';
-import { initAIVoice } from './core/ai-voice/ai-voice.service.js';
-import { startScheduler, stopScheduler } from './core/scheduler/scheduler.service.js';
-import { contactsRouter } from './api/routes/contacts.routes.js';
-import { callsRouter } from './api/routes/calls.routes.js';
-import { webhooksRouter } from './api/routes/webhooks.routes.js';
-import { uploadRouter } from './api/routes/upload.routes.js';
-import logger from './utils/logger.js';
+import { config } from './config/index';
+import { initDatabase, ContactRepository } from './core/contacts/contact.repository';
+import { initDialer } from './core/dialer/dialer.module';
+import { initTelegramBot } from './integrations/telegram/telegram.service';
+import { initOpenAI } from './integrations/openai/openai.service';
+import { initYandexTTS } from './integrations/yandex/tts.service';
+import { initYandexSTT } from './integrations/yandex/stt.service';
+import { initAIVoice } from './core/ai-voice/ai-voice.service';
+import { startScheduler, stopScheduler } from './core/scheduler/scheduler.service';
+import { contactsRouter } from './api/routes/contacts.routes';
+import { callsRouter } from './api/routes/calls.routes';
+import { webhooksRouter } from './api/routes/webhooks.routes';
+import { uploadRouter } from './api/routes/upload.routes';
+import logger from './utils/logger';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,14 +56,14 @@ async function start() {
       logger.info('✓ OpenAI (GPT-4o) initialized');
     }
 
-    if (config.yandex.iamToken && config.yandex.folderId) {
+    if ((config.yandex.apiKey || config.yandex.iamToken) && config.yandex.folderId) {
       initYandexTTS();
       initYandexSTT();
       logger.info('✓ Yandex TTS/STT initialized');
     }
 
-    if (config.mango.login && config.openai.apiKey && config.yandex.iamToken) {
-      initAIVoice();
+    if (config.openai.apiKey && (config.yandex.apiKey || config.yandex.iamToken)) {
+      initAIVoice(config.aiVoice as any);
       logger.info('✓ AI Voice module initialized');
     }
 

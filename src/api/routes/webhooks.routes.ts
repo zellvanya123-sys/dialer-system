@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { handleCallResult } from '../../core/scheduler/scheduler.service.js';
-import { ContactRepository } from '../../core/contacts/contact.repository.js';
-import { CallResult } from '../../core/contacts/contact.model.js';
-import { formatPhoneForCall } from '../../core/scheduler/timezone.js';
-import logger from '../../utils/logger.js';
+import { handleCallResult } from '../../core/scheduler/scheduler.service';
+import { ContactRepository } from '../../core/contacts/contact.repository';
+import { CallResult } from '../../core/contacts/contact.model';
+import { formatPhoneForCall } from '../../core/scheduler/timezone';
+import logger from '../../utils/logger';
 
 export const webhooksRouter = Router();
 

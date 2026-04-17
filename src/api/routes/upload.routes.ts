@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import fs from 'fs';
-import { ContactRepository } from '../../core/contacts/contact.repository.js';
-import { resolveTimezone, resolveCountry, formatPhoneForCall } from '../../core/scheduler/timezone.js';
-import logger from '../../utils/logger.js';
+import { ContactRepository } from '../../core/contacts/contact.repository';
+import { resolveTimezone, resolveCountry, formatPhoneForCall } from '../../core/scheduler/timezone';
+import logger from '../../utils/logger';
 
 export const uploadRouter = Router();
 

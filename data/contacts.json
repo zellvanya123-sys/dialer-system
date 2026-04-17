@@ -1,4 +1,17 @@
 {
-  "contacts": [],
+  "contacts": [
+    {
+      "id": "test-001",
+      "phone": "+79000583947",
+      "name": "Тестовый клиент",
+      "country": "RU",
+      "timezone": "Europe/Moscow",
+      "status": "NEW",
+      "createdAt": "2026-04-17T12:00:00.000Z",
+      "callCount": 0,
+      "lastCallAt": "2026-04-17T13:34:51.022Z",
+      "updatedAt": "2026-04-17T13:34:51.022Z"
+    }
+  ],
   "callLogs": []
 }

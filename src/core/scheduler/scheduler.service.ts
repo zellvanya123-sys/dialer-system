@@ -1,9 +1,9 @@
-import { Contact, ContactStatus, CallResult } from '../contacts/contact.model.js';
-import { ContactRepository } from '../contacts/contact.repository.js';
-import { getNextCallTime, RETRY_STRATEGIES, shouldCallContact } from './retry-strategies.js';
-import { getDialer } from '../dialer/dialer.module.js';
-import { isWithinWorkingHours } from './timezone.js';
-import logger from '../../utils/logger.js';
+import { Contact, ContactStatus, CallResult } from '../contacts/contact.model';
+import { ContactRepository } from '../contacts/contact.repository';
+import { getNextCallTime, RETRY_STRATEGIES, shouldCallContact } from './retry-strategies';
+import { getDialer } from '../dialer/dialer.module';
+import { isWithinWorkingHours } from './timezone';
+import logger from '../../utils/logger';
 
 let callSchedulerInterval: NodeJS.Timeout | null = null;
 let isAutoDialEnabled = false;

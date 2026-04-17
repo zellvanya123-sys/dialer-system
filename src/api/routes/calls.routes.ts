@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { getDialer } from '../../core/dialer/dialer.module.js';
-import { handleCallResult, scheduleAllDueCalls, enableAutoDial, disableAutoDial, getAutoDialStatus, onCallCompleted } from '../../core/scheduler/scheduler.service.js';
-import { ContactRepository } from '../../core/contacts/contact.repository.js';
-import { ContactStatus, CallResult } from '../../core/contacts/contact.model.js';
-import { sendLeadNotification, sendCallNotification } from '../../integrations/telegram/telegram.service.js';
-import { validateCallResult } from '../middleware/validation.js';
-import logger from '../../utils/logger.js';
+import { getDialer } from '../../core/dialer/dialer.module';
+import { handleCallResult, scheduleAllDueCalls, enableAutoDial, disableAutoDial, getAutoDialStatus, onCallCompleted } from '../../core/scheduler/scheduler.service';
+import { getAIVoice } from '../../core/ai-voice/ai-voice.service';
+import { ContactRepository } from '../../core/contacts/contact.repository';
+import { ContactStatus, CallResult } from '../../core/contacts/contact.model';
+import { sendLeadNotification, sendCallNotification } from '../../integrations/telegram/telegram.service';
+import { validateCallResult } from '../middleware/validation';
+import logger from '../../utils/logger';
 
 export const callsRouter = Router();
 
@@ -112,4 +113,20 @@ callsRouter.get('/auto/status', async (req: Request, res: Response) => {
 callsRouter.post('/completed/:contactId', async (req: Request, res: Response) => {
   onCallCompleted();
   res.json({ success: true });
+});
+
+callsRouter.put('/ai-script', async (req: Request, res: Response) => {
+  try {
+    const { systemPrompt, welcomeMessage, maxTurns, timeoutMs } = req.body;
+    getAIVoice().updateConfig({ systemPrompt, welcomeMessage, maxTurns, timeoutMs });
+    res.json({ success: true });
+  } catch (error: any) {
+    logger.error(`Error updating AI script: ${error.message}`);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+callsRouter.get('/ai-script', async (req: Request, res: Response) => {
+  const sessions = getAIVoice().getAllSessions();
+  res.json({ sessions, sessionCount: sessions.length });
 });
