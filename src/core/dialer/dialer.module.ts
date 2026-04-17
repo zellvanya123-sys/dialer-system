@@ -15,11 +15,13 @@ class SipuniDialer {
   private user: string;
   private secret: string;
   private sipNumber: string;
+  private host: string;
 
   constructor() {
     this.user = config.sipuni.user || '';
     this.secret = config.sipuni.secret || '';
     this.sipNumber = config.sipuni.sipNumber || '';
+    this.host = config.sipuni.host || 'voip.sipuni.ru';
 
     if (!this.user || !this.secret || !this.sipNumber) {
       throw new Error('Sipuni credentials not configured');
@@ -57,7 +59,7 @@ class SipuniDialer {
 
     try {
       const response = await axios.post(
-        'https://sipuni.com/api/callback/call_number',
+        `https://${this.host}/api/callback/call_number`,
         new URLSearchParams({ ...params, hash }).toString(),
         {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -80,7 +82,7 @@ class SipuniDialer {
     };
     const hash = this.generateHash(params);
 
-    const response = await axios.get('https://sipuni.com/api/statistic/get', {
+    const response = await axios.get(`https://${this.host}/api/statistic/get`, {
       params: { ...params, hash },
     });
     return response.data;
