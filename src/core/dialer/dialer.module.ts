@@ -17,12 +17,15 @@ class SipuniDialer {
   private secret: string;
   private sipNumber: string;
   private host: string;
+  private port: string;
 
   constructor() {
     this.user = config.sipuni.user || '';
     this.secret = config.sipuni.secret || '';
     this.sipNumber = config.sipuni.sipNumber || '';
     this.host = config.sipuni.host || 'voip.sipuni.ru';
+    this.port = config.sipuni.port || '443';
+    this.port = config.sipuni.port || '443';
 
     if (!this.user || !this.secret || !this.sipNumber) {
       throw new Error('Sipuni credentials not configured');
@@ -77,8 +80,11 @@ class SipuniDialer {
     const hash = this.generateHash(params);
 
     try {
+      const protocol = this.port === '443' ? 'https' : 'http';
+      const url = `${protocol}://${this.host}:${this.port}/api/callback/call_number`;
+      logger.info(`Calling SIPuni: ${url}`);
       const response = await this.http.post(
-        `https://${this.host}/api/callback/call_number`,
+        url,
         new URLSearchParams({ ...params, hash }).toString(),
         {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

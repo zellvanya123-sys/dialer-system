@@ -17,6 +17,7 @@ export const config = {
 
   sipuni: {
     host: process.env.SIPUNI_HOST || 'voip.sipuni.ru',
+    port: process.env.SIPUNI_PORT || '443',
     user: process.env.SIPUNI_USER,
     secret: process.env.SIPUNI_SECRET,
     sipNumber: process.env.SIPUNI_SIP_NUMBER,
