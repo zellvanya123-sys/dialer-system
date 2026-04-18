@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { handleCallResult } from '../../core/scheduler/scheduler.service';
+import { handleCallResult, onCallCompleted } from '../../core/scheduler/scheduler.service';
 import { ContactRepository } from '../../core/contacts/contact.repository';
+import { createCallLog } from '../../core/dialer/dialer.module';
 import { CallResult } from '../../core/contacts/contact.model';
 import { formatPhoneForCall } from '../../core/scheduler/timezone';
+import { sendCallNotification } from '../../integrations/telegram/telegram.service';
 import logger from '../../utils/logger';
 
 export const webhooksRouter = Router();
@@ -60,6 +62,13 @@ webhooksRouter.post('/sipuni', async (req: Request, res: Response) => {
 
     logger.info(`Sipuni webhook: event=${event}, call_id=${call_id}, src=${src_num}, dst=${dst_num}, status=${status}`);
 
+    // event=1 — звонок начался
+    if (String(event) === '1') {
+      logger.info(`Sipuni: call started, call_id=${call_id}`);
+      return res.json({ success: true });
+    }
+
+    // event=2 — звонок завершился
     if (String(event) === '2') {
       const phone = dst_num || src_num;
       if (!phone) {
@@ -73,6 +82,7 @@ webhooksRouter.post('/sipuni', async (req: Request, res: Response) => {
         return res.json({ success: true });
       }
 
+      // Считаем длительность звонка
       const startTs = parseInt(call_start_timestamp) || 0;
       const answerTs = parseInt(call_answer_timestamp) || 0;
       const endTs = parseInt(timestamp) || 0;
@@ -84,13 +94,32 @@ webhooksRouter.post('/sipuni', async (req: Request, res: Response) => {
 
       const callResult = mapSipuniStatus(status, callDuration);
 
+      // ✅ 1. Уменьшаем счётчик активных звонков
+      onCallCompleted();
+
+      // ✅ 2. Сохраняем лог звонка в БД
+      await createCallLog(contact.id, callResult, callDuration);
+
+      // ✅ 3. Обновляем статус контакта
       await handleCallResult(contact.id, callResult);
 
+      // ✅ 4. Обновляем длительность звонка
       ContactRepository.update(contact.id, {
         lastCallDuration: callDuration,
       });
 
-      logger.info(`Sipuni: processed call for ${contact.name} (${phone}), status=${status}, result=${callResult}, duration=${callDuration}s`);
+      // ✅ 5. Отправляем уведомление в Telegram
+      try {
+        await sendCallNotification({
+          name: contact.name,
+          phone: contact.phone,
+          status: callResult,
+        });
+      } catch (tgError: any) {
+        logger.warn(`Telegram notification failed: ${tgError.message}`);
+      }
+
+      logger.info(`Sipuni: call done for ${contact.name} (${phone}) | status=${status} | result=${callResult} | duration=${callDuration}s`);
     }
 
     res.json({ success: true });
