@@ -9,30 +9,9 @@ export function initTelegramBot(): TelegramBot {
     throw new Error('Telegram bot token not configured');
   }
 
-<<<<<<< HEAD
-  const options: any = {
-    polling: true
-  };
-
-  bot = new TelegramBot(config.telegram.botToken, options);
-=======
   bot = new TelegramBot(config.telegram.botToken, {
-    polling: true,
-    request: {
-      proxy: 'http://127.0.0.1:12334'
-    }
+    polling: true
   });
-
-  bot.onText(/\/start/, (msg) => {
-    bot!.sendMessage(msg.chat.id, `✅ Бот работает!\nВаш chat_id: ${msg.chat.id}`);
-  });
-
-  bot.on('polling_error', (err) => {
-    logger.error(`[polling_error] ${JSON.stringify(err)}`);
-  });
-
->>>>>>> 3f29c401a91beaa41946b54c3df42a55f6072754
-  logger.info('Telegram bot initialized');
 
   bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
@@ -59,6 +38,7 @@ export function initTelegramBot(): TelegramBot {
     logger.error(`[polling_error] ${JSON.stringify(err)}`);
   });
 
+  logger.info('Telegram bot initialized');
   return bot;
 }
 
