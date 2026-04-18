@@ -5,7 +5,7 @@ interface Stats {
   rejected: number; noAnswer: number; dueForCall: number
   totalCalls: number; answeredCalls: number; totalDurationSec: number
   conversionRate: number; activeCalls: number; autoDialEnabled: boolean
-  leadsByQualification: { withBudget: number; withTask: number; decisionMaker: number }
+  leadsByQualification?: { withBudget: number; withTask: number; decisionMaker: number }
 }
 interface Contact {
   id: string; name: string; phone: string; status: string
@@ -220,7 +220,9 @@ export function Dashboard() {
     </div>
   )
 
-  const s = stats || { total: 0, new: 0, inProgress: 0, leads: 0, rejected: 0, noAnswer: 0, dueForCall: 0, totalCalls: 0, answeredCalls: 0, totalDurationSec: 0, conversionRate: 0, activeCalls: 0, autoDialEnabled: false, leadsByQualification: { withBudget: 0, withTask: 0, decisionMaker: 0 } }
+  const s = stats || { total: 0, new: 0, inProgress: 0, leads: 0, rejected: 0, noAnswer: 0, dueForCall: 0, totalCalls: 0, answeredCalls: 0, totalDurationSec: 0, conversionRate: 0, activeCalls: 0, autoDialEnabled: false }
+  // ✅ Защита от undefined — API может не вернуть это поле
+  const lq = s.leadsByQualification || { withBudget: 0, withTask: 0, decisionMaker: 0 }
   const reachRate = s.totalCalls > 0 ? Math.round((s.answeredCalls / s.totalCalls) * 100) : 0
   const leadRate = s.answeredCalls > 0 ? Math.round((s.leads / s.answeredCalls) * 100) : 0
   const avgDur = s.answeredCalls > 0 ? Math.round(s.totalDurationSec / s.answeredCalls) : 0
@@ -319,9 +321,9 @@ export function Dashboard() {
                   <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600, color: '#0f172a' }}>Квалификация лидов</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {[
-                      { label: '💰 С бюджетом', value: s.leadsByQualification.withBudget },
-                      { label: '✅ С задачей', value: s.leadsByQualification.withTask },
-                      { label: '👔 ЛПР', value: s.leadsByQualification.decisionMaker },
+                      { label: '💰 С бюджетом', value: lq.withBudget },
+                      { label: '✅ С задачей', value: lq.withTask },
+                      { label: '👔 ЛПР', value: lq.decisionMaker },
                     ].map(item => (
                       <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span style={{ fontSize: 13, color: '#374151' }}>{item.label}</span>
