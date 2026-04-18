@@ -9,6 +9,7 @@ import logger from '../../utils/logger';
 
 export const webhooksRouter = Router();
 
+// ✅ Поиск контакта по телефону
 function findContactByPhone(phone: string) {
   const clean = phone.replace(/\D/g, '');
   const normalized = formatPhoneForCall(phone);
@@ -20,6 +21,7 @@ function findContactByPhone(phone: string) {
   }) || null;
 }
 
+// ✅ Маппинг статуса Sipuni → наш CallResult
 function mapSipuniStatus(status: string, duration: number): CallResult {
   switch (status?.toUpperCase()) {
     case 'ANSWER':
@@ -39,28 +41,78 @@ function mapSipuniStatus(status: string, duration: number): CallResult {
   }
 }
 
+// ✅ AMD детектор — определяем автоответчик по признакам
+// Sipuni передаёт dst_type или src_type = 'ivr'/'machine' для автоответчиков
+// Также детектируем по очень короткому времени ответа и специфическим статусам
+function isAnsweringMachine(data: {
+  dst_type?: string;
+  src_type?: string;
+  duration?: number;
+  call_answer_timestamp?: string;
+  call_start_timestamp?: string;
+  status?: string;
+}): boolean {
+  // Sipuni прямо говорит что это машина
+  const dstType = (data.dst_type || '').toLowerCase();
+  const srcType = (data.src_type || '').toLowerCase();
+  if (dstType === 'ivr' || dstType === 'machine' || srcType === 'ivr' || srcType === 'machine') {
+    return true;
+  }
+
+  // Звонок ответили но сразу сбросили (< 3 секунд) — скорее всего автоответчик
+  const answerTs = parseInt(data.call_answer_timestamp || '0');
+  const startTs = parseInt(data.call_start_timestamp || '0');
+  if (answerTs > 0 && startTs > 0) {
+    const timeToAnswer = answerTs - startTs;
+    const duration = parseInt(String(data.duration || '0'));
+    // Ответил мгновенно (< 1 сек) и разговор очень короткий (< 3 сек)
+    if (timeToAnswer < 1 && duration < 3) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ✅ Проверка секретного токена Sipuni
+function verifySipuniToken(req: Request): boolean {
+  const webhookSecret = process.env.SIPUNI_WEBHOOK_SECRET;
+
+  // Если секрет не задан — пропускаем проверку (совместимость)
+  if (!webhookSecret) return true;
+
+  const token = req.headers['x-sipuni-token'] || req.body?.token || req.query?.token;
+  return token === webhookSecret;
+}
+
 /**
  * Sipuni HTTP API webhook
  * event=1 — начало звонка
- * event=2 — завершение звонка (hang up)
- *
- * Параметры: event, call_id, src_num, dst_num, src_type, dst_type,
- * timestamp, call_start_timestamp, call_answer_timestamp, status, duration
+ * event=2 — завершение звонка
  */
 webhooksRouter.post('/sipuni', async (req: Request, res: Response) => {
   try {
+    // ✅ Проверка токена
+    if (!verifySipuniToken(req)) {
+      logger.warn(`Sipuni webhook: invalid token from ${req.ip}`);
+      return res.status(403).json({ error: 'Forbidden: invalid token' });
+    }
+
     const {
       event,
       call_id,
       src_num,
       dst_num,
+      dst_type,
+      src_type,
       status,
+      duration,
       timestamp,
       call_start_timestamp,
       call_answer_timestamp,
     } = req.body;
 
-    logger.info(`Sipuni webhook: event=${event}, call_id=${call_id}, src=${src_num}, dst=${dst_num}, status=${status}`);
+    logger.info(`Sipuni webhook: event=${event}, call_id=${call_id}, src=${src_num}, dst=${dst_num}, status=${status}, dst_type=${dst_type}`);
 
     // event=1 — звонок начался
     if (String(event) === '1') {
@@ -82,44 +134,54 @@ webhooksRouter.post('/sipuni', async (req: Request, res: Response) => {
         return res.json({ success: true });
       }
 
-      // Считаем длительность звонка
-      const startTs = parseInt(call_start_timestamp) || 0;
+      // Считаем длительность
       const answerTs = parseInt(call_answer_timestamp) || 0;
       const endTs = parseInt(timestamp) || 0;
-
       let callDuration = 0;
       if (answerTs > 0 && endTs > 0) {
         callDuration = endTs - answerTs;
       }
 
-      const callResult = mapSipuniStatus(status, callDuration);
-
-      // ✅ 1. Уменьшаем счётчик активных звонков
-      onCallCompleted();
-
-      // ✅ 2. Сохраняем лог звонка в БД
-      await createCallLog(contact.id, callResult, callDuration);
-
-      // ✅ 3. Обновляем статус контакта
-      await handleCallResult(contact.id, callResult);
-
-      // ✅ 4. Обновляем длительность звонка
-      ContactRepository.update(contact.id, {
-        lastCallDuration: callDuration,
+      // ✅ AMD: проверяем автоответчик ДО маппинга статуса
+      const machine = isAnsweringMachine({
+        dst_type, src_type, duration,
+        call_answer_timestamp, call_start_timestamp, status,
       });
 
-      // ✅ 5. Отправляем уведомление в Telegram
+      let callResult: CallResult;
+
+      if (machine) {
+        // Автоответчик — помечаем как MACHINE и перезваниваем позже
+        callResult = CallResult.MACHINE;
+        logger.info(`Sipuni: ANSWERING MACHINE detected for ${contact.name} (${phone})`);
+      } else {
+        callResult = mapSipuniStatus(status, callDuration);
+      }
+
+      // 1. Уменьшаем счётчик активных звонков
+      onCallCompleted();
+
+      // 2. Сохраняем лог в БД
+      await createCallLog(contact.id, callResult, callDuration);
+
+      // 3. Обновляем статус контакта
+      await handleCallResult(contact.id, callResult);
+
+      // 4. Обновляем длительность
+      ContactRepository.update(contact.id, { lastCallDuration: callDuration });
+
+      // 5. Уведомление в Telegram
       try {
         await sendCallNotification({
           name: contact.name,
           phone: contact.phone,
-          status: callResult,
+          status: machine ? 'machine' : callResult,
         });
       } catch (tgError: any) {
         logger.warn(`Telegram notification failed: ${tgError.message}`);
       }
 
-      logger.info(`Sipuni: call done for ${contact.name} (${phone}) | status=${status} | result=${callResult} | duration=${callDuration}s`);
+      logger.info(`Sipuni: done | contact=${contact.name} | status=${status} | result=${callResult} | duration=${callDuration}s | machine=${machine}`);
     }
 
     res.json({ success: true });
