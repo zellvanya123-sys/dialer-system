@@ -24,7 +24,8 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(express.static(path.join(__dirname, '../frontend')));
+// ✅ Раздаём собранный React из frontend/dist/
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 app.use('/api/contacts', contactsRouter);
 app.use('/api/calls', callsRouter);
@@ -35,8 +36,9 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/index.html'));
+// ✅ Все остальные запросы отдаём index.html (для React Router)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
 async function start() {
