@@ -1,5 +1,7 @@
 node_modules/
 dist/
+frontend/node_modules/
 .env
 *.log
 .DS_Store
+# frontend/dist НЕ игнорируем — нужен для продакшна
