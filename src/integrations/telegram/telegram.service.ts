@@ -9,7 +9,12 @@ export function initTelegramBot(): TelegramBot {
     throw new Error('Telegram bot token not configured');
   }
 
-  bot = new TelegramBot(config.telegram.botToken, { polling: true });
+  bot = new TelegramBot(config.telegram.botToken, {
+    polling: true,
+    request: {
+      proxy: 'http://127.0.0.1:12334'
+    }
+  });
 
   bot.onText(/\/start/, (msg) => {
     bot!.sendMessage(msg.chat.id, `✅ Бот работает!\nВаш chat_id: ${msg.chat.id}`);
