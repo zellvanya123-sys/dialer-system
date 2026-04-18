@@ -9,11 +9,29 @@ export function initTelegramBot(): TelegramBot {
     throw new Error('Telegram bot token not configured');
   }
 
+<<<<<<< HEAD
   const options: any = {
     polling: true
   };
 
   bot = new TelegramBot(config.telegram.botToken, options);
+=======
+  bot = new TelegramBot(config.telegram.botToken, {
+    polling: true,
+    request: {
+      proxy: 'http://127.0.0.1:12334'
+    }
+  });
+
+  bot.onText(/\/start/, (msg) => {
+    bot!.sendMessage(msg.chat.id, `✅ Бот работает!\nВаш chat_id: ${msg.chat.id}`);
+  });
+
+  bot.on('polling_error', (err) => {
+    logger.error(`[polling_error] ${JSON.stringify(err)}`);
+  });
+
+>>>>>>> 3f29c401a91beaa41946b54c3df42a55f6072754
   logger.info('Telegram bot initialized');
 
   bot.on('message', async (msg) => {
@@ -60,7 +78,6 @@ export async function sendLeadNotification(lead: {
   }
   const message = `🎯 *Новый лид!*\n*Имя:* ${lead.name}\n*Телефон:* ${lead.phone}\n*Задача:* ${lead.qualification.hasTask ? '✅ Да' : '❌ Нет'}\n*Бюджет:* ${lead.qualification.hasBudget ? '✅ Есть' : '❌ Нет'}\n*Решения принимает:* ${lead.qualification.decisionMaker}\n*Планирует запуск:* ${lead.qualification.launchDate || 'неизвестно'}`;
   await bot.sendMessage(config.telegram.adminChatId, message, { parse_mode: 'Markdown' });
-  logger.info(`Lead notification sent for ${lead.phone}`);
 }
 
 export async function sendCallNotification(contact: {

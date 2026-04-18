@@ -1,13 +1,13 @@
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { Contact, ContactStatus, CallResult } from './contact.model';
+import { Contact, ContactStatus, CallResult, CallLog } from './contact.model';
 import logger from '../../utils/logger';
 
 const DB_FILE = './data/contacts.json';
 
 interface Database {
   contacts: Contact[];
-  callLogs: any[];
+  callLogs: CallLog[];
 }
 
 let db: Database = { contacts: [], callLogs: [] };
@@ -21,6 +21,7 @@ export function initDatabase(): void {
   if (fs.existsSync(DB_FILE)) {
     const data = fs.readFileSync(DB_FILE, 'utf-8');
     db = JSON.parse(data);
+    if (!db.callLogs) db.callLogs = []; // на случай старой БД без callLogs
   } else {
     save();
   }
@@ -108,5 +109,20 @@ export class ContactRepository {
     if (contact) {
       this.update(id, { attemptCount: contact.attemptCount + 1 });
     }
+  }
+
+  // ✅ ИСПРАВЛЕНИЕ: сохраняем лог звонка в БД
+  static addCallLog(log: CallLog): void {
+    db.callLogs.push(log);
+    save();
+    logger.info(`Call log saved: ${log.id} | contact: ${log.contactId} | result: ${log.result}`);
+  }
+
+  static findAllCallLogs(): CallLog[] {
+    return db.callLogs;
+  }
+
+  static findCallLogsByContact(contactId: string): CallLog[] {
+    return db.callLogs.filter(l => l.contactId === contactId);
   }
 }

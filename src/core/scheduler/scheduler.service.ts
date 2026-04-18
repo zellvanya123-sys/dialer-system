@@ -51,7 +51,8 @@ async function processDueCalls(): Promise<void> {
   if (!isAutoDialEnabled) return;
   if (activeCalls >= MAX_CONCURRENT_CALLS) return;
   
-  if (!isWithinWorkingHours('UTC')) {
+  // ✅ ИСПРАВЛЕНИЕ: часовой пояс Europe/Moscow вместо UTC
+  if (!isWithinWorkingHours('Europe/Moscow')) {
     logger.info('Outside working hours, skipping');
     return;
   }
@@ -67,11 +68,21 @@ async function processDueCalls(): Promise<void> {
         logger.info(`Auto-dialing contact: ${contact.name} (${contact.phone})`);
         const dialer = getDialer();
         await dialer.makeCall(contact.id);
+
+        // ✅ ИСПРАВЛЕНИЕ: увеличиваем счётчик и уменьшаем после завершения
         activeCalls++;
+        logger.info(`Active calls: ${activeCalls}`);
+
         ContactRepository.update(contact.id, {
           lastCallAt: new Date().toISOString(),
           status: ContactStatus.CALL_1,
         });
+
+        // Через 60 сек считаем звонок завершённым и уменьшаем счётчик
+        setTimeout(() => {
+          onCallCompleted();
+        }, 60000);
+
       } catch (error: any) {
         logger.error(`Error auto-dialing: ${error.message}`);
       }
@@ -95,7 +106,9 @@ export async function handleCallResult(
     return;
   }
 
-  const strategy = RETRY_STRATEGIES['short'];
+  // ✅ ИСПРАВЛЕНИЕ: берём стратегию из контакта, а не всегда 'short'
+  const strategyName = (contact as any).retryStrategy || 'short';
+  const strategy = RETRY_STRATEGIES[strategyName] || RETRY_STRATEGIES['short'];
   
   if (result === CallResult.ANSWERED && qualification) {
     ContactRepository.update(contactId, {
@@ -151,8 +164,10 @@ export async function handleCallResult(
   logger.info(`Contact ${contactId} marked as REJECT: ${result}`);
 }
 
+// ✅ Уменьшаем счётчик активных звонков
 export function onCallCompleted() {
   if (activeCalls > 0) {
     activeCalls--;
+    logger.info(`Call completed. Active calls now: ${activeCalls}`);
   }
 }

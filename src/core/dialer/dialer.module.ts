@@ -24,8 +24,7 @@ class SipuniDialer {
     this.secret = config.sipuni.secret || '';
     this.sipNumber = config.sipuni.sipNumber || '';
     this.host = config.sipuni.host || 'voip.sipuni.ru';
-    this.port = config.sipuni.port || '443';
-    this.port = config.sipuni.port || '443';
+    this.port = config.sipuni.port || '443'; // ✅ ИСПРАВЛЕНИЕ: убрали дублирующую строку
 
     if (!this.user || !this.secret || !this.sipNumber) {
       throw new Error('Sipuni credentials not configured');
@@ -129,6 +128,7 @@ export function getDialer(): SipuniDialer {
   return dialer;
 }
 
+// ✅ ИСПРАВЛЕНИЕ: createCallLog теперь сохраняет лог в БД
 export async function createCallLog(
   contactId: string,
   result: CallResult,
@@ -147,6 +147,9 @@ export async function createCallLog(
     result,
     duration,
   };
+
+  // Сохраняем в БД — раньше этого не было!
+  ContactRepository.addCallLog(log);
 
   return log;
 }
