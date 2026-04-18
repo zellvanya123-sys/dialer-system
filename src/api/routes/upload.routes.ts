@@ -3,6 +3,7 @@ import multer from 'multer';
 import fs from 'fs';
 import { ContactRepository } from '../../core/contacts/contact.repository';
 import { resolveTimezone, resolveCountry, formatPhoneForCall } from '../../core/scheduler/timezone';
+import { requireApiKey, validatePhone } from '../middleware/validation';
 import logger from '../../utils/logger';
 
 export const uploadRouter = Router();
@@ -19,9 +20,19 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage });
+// ✅ Лимит размера файла 10MB
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.originalname.match(/\.(csv|txt)$/i)) {
+      return cb(new Error('Только CSV файлы разрешены'));
+    }
+    cb(null, true);
+  }
+});
 
-uploadRouter.post('/csv', upload.single('file'), async (req: Request, res: Response) => {
+uploadRouter.post('/csv', requireApiKey, upload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Файл не загружен' });
@@ -29,34 +40,67 @@ uploadRouter.post('/csv', upload.single('file'), async (req: Request, res: Respo
 
     const content = fs.readFileSync(req.file.path, 'utf-8');
     const lines = content.split('\n').filter(line => line.trim());
-    
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-    const phoneIdx = headers.findIndex(h => h.includes('phone') || h.includes('tel'));
-    const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('имя'));
-    const emailIdx = headers.findIndex(h => h.includes('email') || h.includes('почта'));
+
+    if (lines.length < 2) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'CSV файл пустой или содержит только заголовки' });
+    }
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+    const phoneIdx = headers.findIndex(h => h.includes('phone') || h.includes('tel') || h.includes('телефон'));
+    const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('имя') || h.includes('название'));
+    const emailIdx = headers.findIndex(h => h.includes('email') || h.includes('почта') || h.includes('mail'));
 
     if (phoneIdx === -1) {
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'В CSV нет колонки с телефоном' });
+      return res.status(400).json({
+        error: 'В CSV нет колонки с телефоном. Назовите колонку: phone, tel или телефон'
+      });
     }
+
+    // ✅ Загружаем существующие номера для проверки дублей
+    const existingPhones = new Set(
+      ContactRepository.findAll().map(c => c.phone.replace(/\D/g, ''))
+    );
 
     let imported = 0;
     let skipped = 0;
+    let duplicates = 0;
+    let invalidPhones = 0;
+    const errors: string[] = [];
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-      const phone = values[phoneIdx];
+      const rawPhone = values[phoneIdx];
 
-      if (!phone || phone.length < 10) {
+      if (!rawPhone || rawPhone.trim() === '') {
         skipped++;
         continue;
       }
 
-      const name = nameIdx >= 0 ? values[nameIdx] : 'Unknown';
-      const email = emailIdx >= 0 ? values[emailIdx] : undefined;
+      // ✅ Строгая валидация номера
+      const phoneCheck = validatePhone(rawPhone);
+      if (!phoneCheck.valid) {
+        invalidPhones++;
+        if (errors.length < 5) {
+          errors.push(`Строка ${i + 1}: ${phoneCheck.error}`);
+        }
+        continue;
+      }
+
+      const formattedPhone = formatPhoneForCall(rawPhone);
+      const cleanDigits = formattedPhone.replace(/\D/g, '');
+
+      // ✅ Проверка дублей
+      if (existingPhones.has(cleanDigits)) {
+        duplicates++;
+        continue;
+      }
+
+      const name = nameIdx >= 0 && values[nameIdx] ? values[nameIdx] : 'Без имени';
+      const email = emailIdx >= 0 && values[emailIdx] ? values[emailIdx] : undefined;
 
       try {
-        const formattedPhone = formatPhoneForCall(phone);
         const timezone = resolveTimezone(formattedPhone);
         const country = resolveCountry(formattedPhone);
 
@@ -67,18 +111,35 @@ uploadRouter.post('/csv', upload.single('file'), async (req: Request, res: Respo
           timezone,
           country,
         });
+
+        // ✅ Добавляем в Set чтобы не было дублей внутри самого файла
+        existingPhones.add(cleanDigits);
         imported++;
-      } catch (e) {
+      } catch (e: any) {
         skipped++;
+        if (errors.length < 5) errors.push(`Строка ${i + 1}: ${e.message}`);
       }
     }
 
+    // Удаляем загруженный файл
     fs.unlinkSync(req.file.path);
 
-    logger.info(`CSV imported: ${imported} contacts, ${skipped} skipped`);
-    res.json({ success: true, imported, skipped });
+    logger.info(`CSV imported: ${imported} contacts, ${duplicates} duplicates, ${invalidPhones} invalid phones, ${skipped} skipped`);
+
+    res.json({
+      success: true,
+      imported,
+      duplicates,
+      invalidPhones,
+      skipped,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+
   } catch (error: any) {
     logger.error(`CSV import error: ${error.message}`);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({ error: error.message });
   }
 });

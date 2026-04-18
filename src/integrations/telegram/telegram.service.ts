@@ -3,6 +3,7 @@ import { config } from '../../config/index';
 import { ContactRepository } from '../../core/contacts/contact.repository';
 import { enableAutoDial, disableAutoDial, getAutoDialStatus } from '../../core/scheduler/scheduler.service';
 import { ContactStatus } from '../../core/contacts/contact.model';
+import { resolveTimezone, resolveCountry, formatPhoneForCall } from '../../core/scheduler/timezone';
 import logger from '../../utils/logger';
 
 let bot: TelegramBot | null = null;
@@ -12,27 +13,22 @@ function isAdmin(chatId: number): boolean {
   return String(chatId) === String(config.telegram.adminChatId);
 }
 
-// ✅ Валидация телефона с понятной ошибкой
+// ✅ Строгая валидация телефона
 function validatePhone(phone: string): { valid: boolean; error?: string } {
   const digits = phone.replace(/\D/g, '');
-
-  // Российский номер: начинается на 7 или 8, ровно 11 цифр
   const isRussian = digits.startsWith('7') || digits.startsWith('8');
-  if (isRussian) {
-    if (digits.length !== 11) {
-      return {
-        valid: false,
-        error: `❌ Российский номер должен содержать 11 цифр.\nУ вас: ${digits.length} цифр (${phone})\n\nПравильно: +79001234567`
-      };
-    }
-    return { valid: true };
-  }
 
-  // Международный номер: 10-13 цифр
-  if (digits.length < 10 || digits.length > 13) {
+  if (isRussian && digits.length !== 11) {
     return {
       valid: false,
-      error: `❌ Неверный номер телефона: ${phone}\nЦифр: ${digits.length} (нужно 10-13)\n\nПример: +79001234567`
+      error: `❌ Российский номер должен содержать 11 цифр.\nУ вас: ${digits.length} цифр (${phone})\n\nПравильно: +79001234567`
+    };
+  }
+
+  if (!isRussian && (digits.length < 10 || digits.length > 13)) {
+    return {
+      valid: false,
+      error: `❌ Неверный номер: ${phone}\nЦифр: ${digits.length} (нужно 10-13)\n\nПример: +79001234567`
     };
   }
 
@@ -44,16 +40,14 @@ export function initTelegramBot(): TelegramBot {
     throw new Error('Telegram bot token not configured');
   }
 
-  bot = new TelegramBot(config.telegram.botToken, {
-    polling: true
-  });
+  bot = new TelegramBot(config.telegram.botToken, { polling: true });
 
   bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const text = msg.text || '';
     logger.info(`Telegram received: ${text} from ${chatId}`);
 
-    // /start — приветствие
+    // /start
     if (text === '/start') {
       await bot?.sendMessage(chatId,
         '👋 Привет! Я бот для авто-обзвона.\n\n' +
@@ -67,7 +61,7 @@ export function initTelegramBot(): TelegramBot {
         '/add +79001234567 Имя — добавить контакт'
       );
 
-    // /stats — статистика
+    // /stats
     } else if (text === '/stats') {
       const all = ContactRepository.findAll();
       const leads = all.filter(c => c.status === ContactStatus.LEAD).length;
@@ -76,19 +70,22 @@ export function initTelegramBot(): TelegramBot {
       const newContacts = all.filter(c => c.status === ContactStatus.NEW).length;
       const totalCalls = all.reduce((sum, c) => sum + (c.attemptCount || 0), 0);
       const logs = ContactRepository.findAllCallLogs();
+      const { activeCalls, enabled } = getAutoDialStatus();
 
       await bot?.sendMessage(chatId,
         `📊 Статистика:\n\n` +
+        `${enabled ? '✅' : '⏸'} Автодозвон: ${enabled ? 'ВКЛЮЧЁН' : 'ВЫКЛЮЧЕН'}\n` +
+        `📞 Активных звонков: ${activeCalls}\n\n` +
         `👥 Всего контактов: ${all.length}\n` +
         `🆕 Новых: ${newContacts}\n` +
         `🎯 Лидов: ${leads}\n` +
         `❌ Отказов: ${rejected}\n` +
-        `📞 Не ответили: ${noAnswer}\n\n` +
+        `📵 Не ответили: ${noAnswer}\n\n` +
         `📱 Всего звонков: ${totalCalls}\n` +
         `📋 Логов в БД: ${logs.length}`
       );
 
-    // /calls — список контактов на звонок
+    // /calls
     } else if (text === '/calls') {
       const due = ContactRepository.findDueForCall();
       if (due.length === 0) {
@@ -102,22 +99,21 @@ export function initTelegramBot(): TelegramBot {
         );
       }
 
-    // /status — состояние системы
+    // /status
     } else if (text === '/status') {
-      const dialStatus = getAutoDialStatus();
+      const { activeCalls, enabled } = getAutoDialStatus();
       const all = ContactRepository.findAll();
       const due = ContactRepository.findDueForCall();
-      const statusEmoji = dialStatus.enabled ? '✅' : '⏸';
 
       await bot?.sendMessage(chatId,
         `🖥 Состояние системы:\n\n` +
-        `${statusEmoji} Автодозвон: ${dialStatus.enabled ? 'ВКЛЮЧЁН' : 'ВЫКЛЮЧЕН'}\n` +
-        `📞 Активных звонков: ${dialStatus.activeCalls}\n` +
+        `${enabled ? '✅' : '⏸'} Автодозвон: ${enabled ? 'ВКЛЮЧЁН' : 'ВЫКЛЮЧЕН'}\n` +
+        `📞 Активных звонков: ${activeCalls}\n` +
         `👥 Контактов в базе: ${all.length}\n` +
         `⏰ Ожидают звонка: ${due.length}`
       );
 
-    // /enable — включить автодозвон
+    // /enable
     } else if (text === '/enable') {
       if (!isAdmin(chatId)) {
         await bot?.sendMessage(chatId, '⛔ Нет доступа');
@@ -127,7 +123,7 @@ export function initTelegramBot(): TelegramBot {
       await bot?.sendMessage(chatId, '✅ Автодозвон ВКЛЮЧЁН');
       logger.info(`Auto-dial enabled by Telegram admin`);
 
-    // /disable — выключить автодозвон
+    // /disable
     } else if (text === '/disable') {
       if (!isAdmin(chatId)) {
         await bot?.sendMessage(chatId, '⛔ Нет доступа');
@@ -137,7 +133,7 @@ export function initTelegramBot(): TelegramBot {
       await bot?.sendMessage(chatId, '⏸ Автодозвон ВЫКЛЮЧЕН');
       logger.info(`Auto-dial disabled by Telegram admin`);
 
-    // /add +79001234567 Иван — добавить контакт
+    // /add +79001234567 Иван
     } else if (text.startsWith('/add')) {
       if (!isAdmin(chatId)) {
         await bot?.sendMessage(chatId, '⛔ Нет доступа');
@@ -152,41 +148,43 @@ export function initTelegramBot(): TelegramBot {
         return;
       }
 
-      const phone = parts[1];
+      const rawPhone = parts[1];
       const name = parts.slice(2).join(' ') || 'Без имени';
 
-      // ✅ Строгая проверка телефона с понятной ошибкой
-      const phoneCheck = validatePhone(phone);
+      // ✅ Строгая валидация
+      const phoneCheck = validatePhone(rawPhone);
       if (!phoneCheck.valid) {
         await bot?.sendMessage(chatId, phoneCheck.error!);
         return;
       }
 
-      // Проверяем нет ли уже такого контакта
+      const phone = formatPhoneForCall(rawPhone);
+
+      // ✅ Проверка дублей
       const existing = ContactRepository.findAll().find(c =>
         c.phone.replace(/\D/g, '') === phone.replace(/\D/g, '')
       );
       if (existing) {
         await bot?.sendMessage(chatId,
-          `⚠️ Контакт с номером ${phone} уже есть в базе!\nИмя: ${existing.name}`
+          `⚠️ Номер ${phone} уже есть в базе!\nИмя: ${existing.name}`
         );
         return;
       }
 
-      const contact = ContactRepository.create({
-        phone,
-        name,
-        timezone: 'Europe/Moscow',
-        country: 'RU',
-      });
+      // ✅ Timezone определяется автоматически по номеру (не всегда Moscow!)
+      const timezone = resolveTimezone(phone);
+      const country = resolveCountry(phone) || 'RU';
+
+      const contact = ContactRepository.create({ phone, name, timezone, country });
 
       await bot?.sendMessage(chatId,
         `✅ Контакт добавлен!\n\n` +
         `👤 Имя: ${contact.name}\n` +
         `📞 Телефон: ${contact.phone}\n` +
+        `🌍 Часовой пояс: ${contact.timezone}\n` +
         `🆔 ID: ${contact.id}`
       );
-      logger.info(`Contact added via Telegram: ${contact.name} (${contact.phone})`);
+      logger.info(`Contact added via Telegram: ${contact.name} (${contact.phone}), tz: ${timezone}`);
 
     // Неизвестная команда
     } else if (text.startsWith('/')) {
@@ -222,10 +220,10 @@ export async function sendLeadNotification(lead: {
     `🎯 *Новый лид!*\n` +
     `*Имя:* ${lead.name}\n` +
     `*Телефон:* ${lead.phone}\n` +
-    `*Задача:* ${lead.qualification.hasTask ? '✅ Да' : '❌ Нет'}\n` +
-    `*Бюджет:* ${lead.qualification.hasBudget ? '✅ Есть' : '❌ Нет'}\n` +
-    `*Решения принимает:* ${lead.qualification.decisionMaker}\n` +
-    `*Планирует запуск:* ${lead.qualification.launchDate || 'неизвестно'}`;
+    `*Задача:* ${lead.qualification?.hasTask ? '✅ Да' : '❌ Нет'}\n` +
+    `*Бюджет:* ${lead.qualification?.hasBudget ? '✅ Есть' : '❌ Нет'}\n` +
+    `*Решения принимает:* ${lead.qualification?.decisionMaker || '—'}\n` +
+    `*Планирует запуск:* ${lead.qualification?.launchDate || 'неизвестно'}`;
   await bot.sendMessage(config.telegram.adminChatId, message, { parse_mode: 'Markdown' });
 }
 
@@ -236,20 +234,12 @@ export async function sendCallNotification(contact: {
 }): Promise<void> {
   if (!bot || !config.telegram.adminChatId) return;
   const statusEmoji: Record<string, string> = {
-    'answered': '✅',
-    'lead': '🎯',
-    'reject': '❌',
-    'no_answer': '📞',
-    'busy': '🔔',
-    'hangup': '📵',
-    'call1': '🔄',
-    'call2': '🔄',
-    'call3': '🔄',
-    'dont_call': '🚫',
+    'answered': '✅', 'lead': '🎯', 'reject': '❌',
+    'no_answer': '📞', 'busy': '🔔', 'hangup': '📵',
+    'call1': '🔄', 'call2': '🔄', 'call3': '🔄', 'dont_call': '🚫',
   };
-  const emoji = statusEmoji[contact.status] || '📱';
   const message =
-    `${emoji} *Звонок завершён*\n` +
+    `${statusEmoji[contact.status] || '📱'} *Звонок завершён*\n` +
     `*Имя:* ${contact.name}\n` +
     `*Телефон:* ${contact.phone}\n` +
     `*Статус:* ${contact.status}`;
