@@ -12,6 +12,33 @@ function isAdmin(chatId: number): boolean {
   return String(chatId) === String(config.telegram.adminChatId);
 }
 
+// ✅ Валидация телефона с понятной ошибкой
+function validatePhone(phone: string): { valid: boolean; error?: string } {
+  const digits = phone.replace(/\D/g, '');
+
+  // Российский номер: начинается на 7 или 8, ровно 11 цифр
+  const isRussian = digits.startsWith('7') || digits.startsWith('8');
+  if (isRussian) {
+    if (digits.length !== 11) {
+      return {
+        valid: false,
+        error: `❌ Российский номер должен содержать 11 цифр.\nУ вас: ${digits.length} цифр (${phone})\n\nПравильно: +79001234567`
+      };
+    }
+    return { valid: true };
+  }
+
+  // Международный номер: 10-13 цифр
+  if (digits.length < 10 || digits.length > 13) {
+    return {
+      valid: false,
+      error: `❌ Неверный номер телефона: ${phone}\nЦифр: ${digits.length} (нужно 10-13)\n\nПример: +79001234567`
+    };
+  }
+
+  return { valid: true };
+}
+
 export function initTelegramBot(): TelegramBot {
   if (!config.telegram.botToken) {
     throw new Error('Telegram bot token not configured');
@@ -117,7 +144,6 @@ export function initTelegramBot(): TelegramBot {
         return;
       }
 
-      // Парсим: /add +79001234567 Иван Иванов
       const parts = text.split(' ').filter(Boolean);
       if (parts.length < 2) {
         await bot?.sendMessage(chatId,
@@ -129,9 +155,10 @@ export function initTelegramBot(): TelegramBot {
       const phone = parts[1];
       const name = parts.slice(2).join(' ') || 'Без имени';
 
-      // Проверяем формат телефона
-      if (!phone.match(/^\+?[0-9]{10,15}$/)) {
-        await bot?.sendMessage(chatId, `❌ Неверный формат телефона: ${phone}\n\nПример: +79001234567`);
+      // ✅ Строгая проверка телефона с понятной ошибкой
+      const phoneCheck = validatePhone(phone);
+      if (!phoneCheck.valid) {
+        await bot?.sendMessage(chatId, phoneCheck.error!);
         return;
       }
 
@@ -140,7 +167,9 @@ export function initTelegramBot(): TelegramBot {
         c.phone.replace(/\D/g, '') === phone.replace(/\D/g, '')
       );
       if (existing) {
-        await bot?.sendMessage(chatId, `⚠️ Контакт с номером ${phone} уже есть в базе (${existing.name})`);
+        await bot?.sendMessage(chatId,
+          `⚠️ Контакт с номером ${phone} уже есть в базе!\nИмя: ${existing.name}`
+        );
         return;
       }
 
