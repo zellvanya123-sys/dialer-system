@@ -3,13 +3,13 @@ import { ContactRepository } from '../contacts/contact.repository';
 import { getNextCallTime, RETRY_STRATEGIES, shouldCallContact } from './retry-strategies';
 import { getDialer } from '../dialer/dialer.module';
 import { isWithinWorkingHours } from './timezone';
+import { config } from '../../config/index';
 import logger from '../../utils/logger';
 import fs from 'fs';
 
 let callSchedulerInterval: NodeJS.Timeout | null = null;
 let isAutoDialEnabled = false;
 let activeCalls = 0;
-const MAX_CONCURRENT_CALLS = 3;
 const STATE_FILE = './data/scheduler-state.json';
 
 // ✅ Сохраняем состояние в файл — переживает pm2 restart
@@ -28,11 +28,9 @@ function loadState(): void {
     if (fs.existsSync(STATE_FILE)) {
       const raw = fs.readFileSync(STATE_FILE, 'utf-8');
       const state = JSON.parse(raw);
-      // При рестарте activeCalls сбрасываем в 0 — звонки уже завершились
-      activeCalls = 0;
+      activeCalls = 0; // При рестарте сбрасываем — звонки уже завершились
       isAutoDialEnabled = state.isAutoDialEnabled ?? false;
       logger.info(`Scheduler state loaded: autoDialEnabled=${isAutoDialEnabled}`);
-      // Сразу сохраняем с нулевым activeCalls
       saveState();
     }
   } catch (e: any) {
@@ -40,7 +38,6 @@ function loadState(): void {
   }
 }
 
-// Загружаем при старте модуля
 loadState();
 
 export function enableAutoDial() {
@@ -57,6 +54,13 @@ export function disableAutoDial() {
 
 export function getAutoDialStatus() {
   return { enabled: isAutoDialEnabled, activeCalls };
+}
+
+// ✅ FIX #2: Явный инкремент для ручных звонков с дашборда
+export function incrementActiveCalls() {
+  activeCalls++;
+  saveState();
+  logger.info(`Active calls incremented: ${activeCalls}`);
 }
 
 export async function startScheduler(): Promise<void> {
@@ -81,18 +85,29 @@ export async function stopScheduler(): Promise<void> {
 
 async function processDueCalls(): Promise<void> {
   if (!isAutoDialEnabled) return;
-  if (activeCalls >= MAX_CONCURRENT_CALLS) return;
 
+  // ✅ FIX #48: MAX_CONCURRENT_CALLS из config (настраивается через .env)
+  const MAX_CONCURRENT = config.maxConcurrentCalls;
+  if (activeCalls >= MAX_CONCURRENT) return;
+
+  // ✅ FIX #9/#22: Проверяем рабочее время по московскому времени (основа)
   if (!isWithinWorkingHours('Europe/Moscow')) {
-    logger.info('Outside working hours, skipping');
+    logger.info('Outside working hours (Moscow), skipping');
     return;
   }
 
   const contacts = ContactRepository.findDueForCall();
-  const contactsToCall = contacts.slice(0, MAX_CONCURRENT_CALLS - activeCalls);
+  const now = new Date().toISOString();
+
+  // ✅ FIX #29: Фильтруем только те у кого nextCallAt уже прошёл
+  const readyContacts = contacts.filter(c =>
+    !c.nextCallAt || c.nextCallAt <= now
+  );
+
+  const contactsToCall = readyContacts.slice(0, MAX_CONCURRENT - activeCalls);
 
   for (const contact of contactsToCall) {
-    if (activeCalls >= MAX_CONCURRENT_CALLS) break;
+    if (activeCalls >= MAX_CONCURRENT) break;
 
     if (shouldCallContact(contact)) {
       try {
@@ -109,9 +124,14 @@ async function processDueCalls(): Promise<void> {
           status: ContactStatus.CALL_1,
         });
 
+        // ✅ FIX #2: Fallback 5 минут для авто-звонков
         setTimeout(() => {
-          onCallCompleted();
-        }, 60000);
+          if (activeCalls > 0) {
+            activeCalls--;
+            saveState();
+            logger.warn(`Auto-dial fallback timer: decremented activeCalls to ${activeCalls}`);
+          }
+        }, 5 * 60 * 1000);
 
       } catch (error: any) {
         logger.error(`Error auto-dialing: ${error.message}`);
@@ -139,6 +159,7 @@ export async function handleCallResult(
   const strategyName = (contact as any).retryStrategy || 'short';
   const strategy = RETRY_STRATEGIES[strategyName] || RETRY_STRATEGIES['short'];
 
+  // Лид с квалификацией
   if (result === CallResult.ANSWERED && qualification) {
     ContactRepository.update(contactId, {
       status: ContactStatus.LEAD,
@@ -150,7 +171,18 @@ export async function handleCallResult(
     return;
   }
 
-  if (result === CallResult.NO_ANSWER || result === CallResult.BUSY) {
+  // Ответил но без квалификации — просто фиксируем
+  if (result === CallResult.ANSWERED) {
+    ContactRepository.update(contactId, {
+      lastCallResult: result,
+      lastCallAt: new Date().toISOString(),
+      attemptCount: contact.attemptCount + 1,
+    });
+    return;
+  }
+
+  // Нет ответа / занято — retry
+  if (result === CallResult.NO_ANSWER || result === CallResult.BUSY || result === CallResult.MACHINE) {
     const nextAttempt = contact.attemptCount + 1;
 
     if (nextAttempt >= strategy.maxAttempts) {
@@ -161,7 +193,7 @@ export async function handleCallResult(
         lastCallAt: new Date().toISOString(),
         nextCallAt: undefined,
       });
-      logger.info(`Contact ${contactId} marked as NO_ANSWER after ${nextAttempt} attempts`);
+      logger.info(`Contact ${contactId} maxAttempts reached → NO_ANSWER`);
       return;
     }
 
@@ -177,22 +209,26 @@ export async function handleCallResult(
       nextCallAt: nextCallAt.toISOString(),
     });
 
-    logger.info(`Scheduled retry ${nextAttempt} for ${contactId} at ${nextCallAt}`);
+    logger.info(`Retry ${nextAttempt} for ${contactId} at ${nextCallAt}`);
     return;
   }
 
+  // Отказ (сбросил, перегруз и т.д.)
   ContactRepository.update(contactId, {
     status: ContactStatus.REJECT,
     lastCallResult: result,
     lastCallAt: new Date().toISOString(),
   });
-  logger.info(`Contact ${contactId} marked as REJECT: ${result}`);
+  logger.info(`Contact ${contactId} → REJECT: ${result}`);
 }
 
+// ✅ FIX #2: onCallCompleted не уходит в минус
 export function onCallCompleted() {
   if (activeCalls > 0) {
     activeCalls--;
     saveState();
-    logger.info(`Call completed. Active calls now: ${activeCalls}`);
+    logger.info(`Call completed. Active calls: ${activeCalls}`);
+  } else {
+    logger.warn('onCallCompleted called but activeCalls already 0 — ignoring');
   }
 }

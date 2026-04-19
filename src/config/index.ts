@@ -3,17 +3,16 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const config = {
-  port: process.env.PORT || 3000,
+  // ✅ FIX #6: port теперь number, не string
+  port: parseInt(process.env.PORT || '3000'),
   host: process.env.HOST || '0.0.0.0',
   nodeEnv: process.env.NODE_ENV || 'development',
 
+  // ✅ Максимум параллельных звонков — теперь из .env
+  maxConcurrentCalls: parseInt(process.env.MAX_CONCURRENT_CALLS || '3'),
+
   database: {
     path: process.env.DATABASE_PATH || './data/dialer.db',
-  },
-
-  redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
   },
 
   sipuni: {
@@ -61,9 +60,9 @@ export const config = {
   },
 
   callSettings: {
-    minHour: 9,
-    maxHour: 20,
-    maxAttempts: 4,
+    minHour: parseInt(process.env.CALL_MIN_HOUR || '9'),
+    maxHour: parseInt(process.env.CALL_MAX_HOUR || '20'),
+    maxAttempts: parseInt(process.env.CALL_MAX_ATTEMPTS || '4'),
   },
 
   aiVoice: {

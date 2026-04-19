@@ -1,23 +1,40 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 
-// ✅ Простая API авторизация через заголовок X-API-Key
+// ✅ FIX #1: requireApiKey теперь также принимает Basic Auth
+// Это позволяет дашборду (защищённому Basic Auth) работать без отдельного API ключа
 export function requireApiKey(req: Request, res: Response, next: NextFunction): void {
   const apiKey = process.env.API_KEY;
+  const login = process.env.DASHBOARD_LOGIN || 'admin';
+  const password = process.env.DASHBOARD_PASSWORD || 'dialer123';
 
-  // Если API_KEY не задан в .env — пропускаем (для совместимости)
-  if (!apiKey) {
-    next();
-    return;
+  // Проверяем Basic Auth заголовок (дашборд)
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Basic ')) {
+    try {
+      const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf8');
+      const colonIndex = decoded.indexOf(':');
+      const user = decoded.slice(0, colonIndex);
+      const pass = decoded.slice(colonIndex + 1);
+      if (user === login && pass === password) {
+        next();
+        return;
+      }
+    } catch {}
   }
 
-  const provided = req.headers['x-api-key'] || req.query.api_key;
-
-  if (!provided || provided !== apiKey) {
+  // Проверяем API ключ (внешние интеграции)
+  if (apiKey) {
+    const provided = req.headers['x-api-key'] || req.query.api_key;
+    if (provided && provided === apiKey) {
+      next();
+      return;
+    }
     res.status(401).json({ error: 'Unauthorized: invalid or missing API key' });
     return;
   }
 
+  // Если API_KEY не задан — пропускаем (режим разработки)
   next();
 }
 
@@ -59,7 +76,6 @@ export function validateCallResult(data: any): { success: boolean; error?: strin
   return { success: true };
 }
 
-// ✅ Валидация телефона с понятной ошибкой
 export function validatePhone(phone: string): { valid: boolean; error?: string } {
   const digits = phone.replace(/\D/g, '');
   const isRussian = digits.startsWith('7') || digits.startsWith('8');
