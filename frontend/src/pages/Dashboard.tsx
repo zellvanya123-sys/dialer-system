@@ -11,7 +11,6 @@ interface Contact {
   id: string; name: string; phone: string; status: string
   attemptCount: number; lastCallAt?: string; lastCallResult?: string
 }
-
 type Tab = 'overview' | 'contacts' | 'logs'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -19,56 +18,73 @@ const STATUS_LABELS: Record<string, string> = {
   lead: 'Лид', reject: 'Отказ', no_answer: 'Нет ответа', dont_call: 'Не звонить'
 }
 const STATUS_COLORS: Record<string, string> = {
-  new: '#6366f1', call1: '#f59e0b', call2: '#f59e0b', call3: '#f59e0b',
-  lead: '#10b981', reject: '#ef4444', no_answer: '#6b7280', dont_call: '#374151'
+  new: '#818cf8', call1: '#fbbf24', call2: '#fbbf24', call3: '#fbbf24',
+  lead: '#34d399', reject: '#f87171', no_answer: '#64748b', dont_call: '#475569'
 }
 const RESULT_LABELS: Record<string, string> = {
-  answered: '✅ Ответил', no_answer: '📵 Нет ответа', busy: '🔔 Занято',
-  hangup: '📴 Сбросил', congested: '⚡ Перегруз', answering_machine: '🤖 Автоответчик'
+  answered: 'Ответил', no_answer: 'Нет ответа', busy: 'Занято',
+  hangup: 'Сбросил', congested: 'Перегруз', answering_machine: 'Автоответчик'
+}
+const RESULT_ICONS: Record<string, string> = {
+  answered: '✓', no_answer: '✗', busy: '~', hangup: '↩', congested: '!', answering_machine: '⊙'
 }
 
 const fmt = (n: number) => n.toLocaleString('ru')
-const fmtDur = (sec: number) => { const m = Math.floor(sec/60), s = sec%60; return m > 0 ? `${m}м ${s}с` : `${s}с` }
-const fmtDate = (iso?: string) => iso ? new Date(iso).toLocaleString('ru', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'
+const fmtDur = (sec: number) => { const m = Math.floor(sec / 60), s = sec % 60; return m > 0 ? `${m}м ${s}с` : `${s}с` }
+const fmtDate = (iso?: string) => iso ? new Date(iso).toLocaleString('ru', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
 
-function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
+function FunnelBar({ value, max, color, label, count }: { value: number; max: number; color: string; label: string; count: number }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.5s ease' }} />
+    <div className="funnel-row">
+      <div className="funnel-label">
+        <span>{label}</span>
+        <span className="funnel-count">{fmt(count)}</span>
       </div>
-      <span style={{ fontSize: 12, color: '#64748b', minWidth: 30, textAlign: 'right' }}>{pct}%</span>
+      <div className="funnel-track">
+        <div className="funnel-fill" style={{ width: `${pct}%`, background: color }} />
+        <span className="funnel-pct">{pct}%</span>
+      </div>
     </div>
   )
 }
 
-function StatCard({ label, value, sub, color, icon }: { label: string; value: string | number; sub?: string; color: string; icon: string }) {
+function StatCard({ label, value, sub, accent, icon }: { label: string; value: string | number; sub?: string; accent: string; icon: string }) {
   return (
-    <div className="stat-card" style={{ background: '#fff', borderRadius: 16, padding: '16px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', borderLeft: `4px solid ${color}` }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>{label}</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{value}</div>
-          {sub && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{sub}</div>}
-        </div>
-        <div style={{ fontSize: 24, opacity: 0.15 }}>{icon}</div>
-      </div>
+    <div className="stat-card" style={{ '--accent': accent } as any}>
+      <div className="stat-icon">{icon}</div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-label">{label}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
+      <div className="stat-glow" />
     </div>
   )
 }
 
 function Toggle({ checked, onChange, loading }: { checked: boolean; onChange: () => void; loading?: boolean }) {
   return (
-    <button onClick={onChange} disabled={loading} style={{ width: 52, height: 28, borderRadius: 14, border: 'none', cursor: loading ? 'wait' : 'pointer', background: checked ? '#10b981' : '#d1d5db', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-      <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: checked ? 27 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+    <button className={`toggle ${checked ? 'on' : ''}`} onClick={onChange} disabled={loading}>
+      <div className="toggle-knob" />
     </button>
   )
 }
 
 function Badge({ status }: { status: string }) {
-  const color = STATUS_COLORS[status] || '#6b7280'
-  return <span style={{ background: color+'20', color, border: `1px solid ${color}40`, borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{STATUS_LABELS[status] || status}</span>
+  const color = STATUS_COLORS[status] || '#64748b'
+  return (
+    <span className="badge" style={{ '--bc': color } as any}>
+      {STATUS_LABELS[status] || status}
+    </span>
+  )
+}
+
+function Notification({ text, type }: { text: string; type: 'success' | 'error' }) {
+  return (
+    <div className={`notif ${type}`}>
+      <span className="notif-dot" />
+      {text}
+    </div>
+  )
 }
 
 export function Dashboard() {
@@ -86,7 +102,7 @@ export function Dashboard() {
   const [addName, setAddName] = useState('')
   const [addLoading, setAddLoading] = useState(false)
   const [addError, setAddError] = useState('')
-  const [notification, setNotification] = useState<{text:string;type:'success'|'error'}|null>(null)
+  const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
   const [sheetsUrl, setSheetsUrl] = useState('')
   const [sheetsBatch, setSheetsBatch] = useState('500')
   const [sheetsLoading, setSheetsLoading] = useState(false)
@@ -95,8 +111,8 @@ export function Dashboard() {
   const [csvResult, setCsvResult] = useState<any>(null)
   const csvRef = useRef<HTMLInputElement>(null)
 
-  const notify = (text: string, type: 'success'|'error' = 'success') => {
-    setNotification({text, type}); setTimeout(() => setNotification(null), 4000)
+  const notify = (text: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ text, type }); setTimeout(() => setNotification(null), 4000)
   }
 
   const fetchStats = useCallback(async () => {
@@ -108,7 +124,7 @@ export function Dashboard() {
   }, [])
 
   const fetchContacts = useCallback(async () => {
-    try { const res = await fetch('/api/contacts'); if (res.ok) setContacts(await res.json()) } catch {}
+    try { const res = await fetch('/api/contacts'); if (res.ok) setContacts(await res.json()) } catch { }
   }, [])
 
   useEffect(() => { fetchStats(); fetchContacts() }, [fetchStats, fetchContacts])
@@ -121,19 +137,19 @@ export function Dashboard() {
     if (!stats || toggleLoading) return
     setToggleLoading(true)
     try {
-      await fetch(stats.autoDialEnabled ? '/api/calls/auto/disable' : '/api/calls/auto/enable', {method:'POST'})
+      await fetch(stats.autoDialEnabled ? '/api/calls/auto/disable' : '/api/calls/auto/enable', { method: 'POST' })
       await fetchStats()
-      notify(stats.autoDialEnabled ? '⏸ Автодозвон выключен' : '✅ Автодозвон включён')
+      notify(stats.autoDialEnabled ? 'Автодозвон остановлен' : 'Автодозвон запущен')
     } catch { notify('Ошибка', 'error') } finally { setToggleLoading(false) }
   }
 
   const initiateCall = async (contactId: string, name: string) => {
     setCallLoading(contactId)
     try {
-      const res = await fetch(`/api/calls/initiate/${contactId}`, {method:'POST'})
+      const res = await fetch(`/api/calls/initiate/${contactId}`, { method: 'POST' })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Ошибка')
-      notify(`📞 Звонок ${name} инициирован`); fetchStats()
+      notify(`Звонок ${name} инициирован`); fetchStats()
     } catch (e: any) { notify(e.message, 'error') } finally { setCallLoading(null) }
   }
 
@@ -141,16 +157,16 @@ export function Dashboard() {
     if (!addPhone.trim()) { setAddError('Введите номер'); return }
     setAddLoading(true); setAddError('')
     try {
-      const res = await fetch('/api/contacts', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phone:addPhone.trim(),name:addName.trim()||'Без имени'})})
+      const res = await fetch('/api/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: addPhone.trim(), name: addName.trim() || 'Без имени' }) })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Ошибка')
-      setAddPhone(''); setAddName(''); notify(`✅ Добавлен: ${d.name}`); fetchContacts(); fetchStats()
+      setAddPhone(''); setAddName(''); notify(`Добавлен: ${d.name}`); fetchContacts(); fetchStats()
     } catch (e: any) { setAddError(e.message) } finally { setAddLoading(false) }
   }
 
   const deleteContact = async (id: string, name: string) => {
     if (!confirm(`Удалить "${name}"?`)) return
-    try { await fetch(`/api/contacts/${id}`, {method:'DELETE'}); notify('🗑️ Удалён'); fetchContacts(); fetchStats() }
+    try { await fetch(`/api/contacts/${id}`, { method: 'DELETE' }); notify('Контакт удалён'); fetchContacts(); fetchStats() }
     catch { notify('Ошибка', 'error') }
   }
 
@@ -158,22 +174,22 @@ export function Dashboard() {
     if (!sheetsUrl.trim()) { notify('Вставьте ссылку на Google Sheets', 'error'); return }
     setSheetsLoading(true); setSheetsResult(null)
     try {
-      const res = await fetch('/api/upload/google-sheets', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:sheetsUrl.trim(), batchSize:parseInt(sheetsBatch)||500})})
+      const res = await fetch('/api/upload/google-sheets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: sheetsUrl.trim(), batchSize: parseInt(sheetsBatch) || 500 }) })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Ошибка')
-      setSheetsResult(d); notify(`✅ Импортировано ${d.imported} контактов`); fetchContacts(); fetchStats()
-    } catch (e: any) { notify(e.message, 'error'); setSheetsResult({error: e.message}) } finally { setSheetsLoading(false) }
+      setSheetsResult(d); notify(`Импортировано ${d.imported} контактов`); fetchContacts(); fetchStats()
+    } catch (e: any) { notify(e.message, 'error'); setSheetsResult({ error: e.message }) } finally { setSheetsLoading(false) }
   }
 
   const importCsv = async (file: File) => {
     setCsvLoading(true); setCsvResult(null)
     const formData = new FormData(); formData.append('file', file)
     try {
-      const res = await fetch('/api/upload/csv', {method:'POST', body:formData})
+      const res = await fetch('/api/upload/csv', { method: 'POST', body: formData })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Ошибка')
-      setCsvResult(d); notify(`✅ Импортировано ${d.imported} контактов`); fetchContacts(); fetchStats()
-    } catch (e: any) { notify(e.message, 'error'); setCsvResult({error: e.message}) } finally { setCsvLoading(false) }
+      setCsvResult(d); notify(`Импортировано ${d.imported} контактов`); fetchContacts(); fetchStats()
+    } catch (e: any) { notify(e.message, 'error'); setCsvResult({ error: e.message }) } finally { setCsvLoading(false) }
   }
 
   const filtered = contacts.filter(c =>
@@ -182,248 +198,321 @@ export function Dashboard() {
   )
 
   if (loading) return (
-    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f8fafc'}}>
-      <div style={{textAlign:'center'}}><div style={{fontSize:40,marginBottom:16}}>⚡</div><div style={{color:'#64748b'}}>Загружаем дашборд...</div></div>
+    <div className="splash">
+      <div className="splash-inner">
+        <div className="splash-logo">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="24" r="23" stroke="#34d399" strokeWidth="1.5" strokeDasharray="4 2" />
+            <path d="M16 18c0-1.1.9-2 2-2h2a2 2 0 012 2v3a2 2 0 01-2 2h-1c0 3.3 2.7 6 6 6v-1a2 2 0 012-2h3a2 2 0 012 2v2a2 2 0 01-2 2c-7.2 0-13-5.8-13-13z" fill="#34d399" />
+          </svg>
+        </div>
+        <div className="splash-text">Загрузка системы...</div>
+        <div className="splash-bar"><div className="splash-fill" /></div>
+      </div>
     </div>
   )
 
-  const s = stats || {total:0,new:0,inProgress:0,leads:0,rejected:0,noAnswer:0,dueForCall:0,totalCalls:0,answeredCalls:0,totalDurationSec:0,conversionRate:0,activeCalls:0,autoDialEnabled:false}
-  const lq = s.leadsByQualification || {withBudget:0,withTask:0,decisionMaker:0}
-  const reachRate = s.totalCalls > 0 ? Math.round(s.answeredCalls/s.totalCalls*100) : 0
-  const leadRate = s.answeredCalls > 0 ? Math.round(s.leads/s.answeredCalls*100) : 0
-  const avgDur = s.answeredCalls > 0 ? Math.round(s.totalDurationSec/s.answeredCalls) : 0
+  const s = stats || { total: 0, new: 0, inProgress: 0, leads: 0, rejected: 0, noAnswer: 0, dueForCall: 0, totalCalls: 0, answeredCalls: 0, totalDurationSec: 0, conversionRate: 0, activeCalls: 0, autoDialEnabled: false }
+  const lq = s.leadsByQualification || { withBudget: 0, withTask: 0, decisionMaker: 0 }
+  const reachRate = s.totalCalls > 0 ? Math.round(s.answeredCalls / s.totalCalls * 100) : 0
+  const leadRate = s.answeredCalls > 0 ? Math.round(s.leads / s.answeredCalls * 100) : 0
+  const avgDur = s.answeredCalls > 0 ? Math.round(s.totalDurationSec / s.answeredCalls) : 0
 
   return (
-    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",background:'#f1f5f9',minHeight:'100vh'}}>
-
+    <div className="app">
       {/* Уведомление */}
-      {notification && (
-        <div style={{position:'fixed',top:16,right:16,left:16,zIndex:1000,background:notification.type==='success'?'#10b981':'#ef4444',color:'#fff',padding:'12px 20px',borderRadius:12,boxShadow:'0 4px 20px rgba(0,0,0,0.15)',fontSize:14,fontWeight:500,textAlign:'center'}}>
-          {notification.text}
-        </div>
-      )}
+      {notification && <Notification text={notification.text} type={notification.type} />}
 
       {/* Шапка */}
-      <div style={{background:'#0f172a',color:'#fff',padding:'0 16px'}}>
-        <div className="header-top" style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,padding:'12px 0'}}>
-          {/* Логотип */}
-          <div style={{display:'flex',alignItems:'center',gap:10}}>
-            <span style={{fontSize:20}}>📞</span>
-            <span style={{fontWeight:700,fontSize:15}}>AI Автодозвон</span>
-            {apiError && <span style={{background:'#ef444420',color:'#f87171',border:'1px solid #ef444440',borderRadius:6,padding:'2px 8px',fontSize:11}}>⚠️ Нет связи</span>}
+      <header className="header">
+        <div className="header-inner">
+          <div className="brand">
+            <div className="brand-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" fill="currentColor" />
+              </svg>
+            </div>
+            <span className="brand-name">AI Autodial</span>
+            {apiError && <span className="error-badge">● Нет связи</span>}
           </div>
-          {/* Правая часть */}
-          <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <span style={{fontSize:12,color:'#94a3b8'}}>Автодозвон</span>
+
+          <div className="header-controls">
+            <div className="active-pill" data-active={s.activeCalls > 0}>
+              <span className="pulse-dot" />
+              <span>{s.activeCalls} активных</span>
+            </div>
+
+            <div className="autodial-control">
+              <span className="control-label">Автодозвон</span>
               <Toggle checked={s.autoDialEnabled} onChange={toggleAutoDial} loading={toggleLoading} />
-              <span style={{fontSize:12,color:s.autoDialEnabled?'#10b981':'#94a3b8',fontWeight:600}}>{s.autoDialEnabled?'ВКЛ':'ВЫКЛ'}</span>
+              <span className="control-status" data-on={s.autoDialEnabled}>
+                {s.autoDialEnabled ? 'ВКЛ' : 'ВЫКЛ'}
+              </span>
             </div>
-            <div style={{display:'flex',alignItems:'center',gap:6,background:s.activeCalls>0?'#10b98120':'#ffffff10',borderRadius:8,padding:'5px 10px'}}>
-              <div style={{width:7,height:7,borderRadius:'50%',background:s.activeCalls>0?'#10b981':'#475569'}} />
-              <span style={{fontSize:12,color:s.activeCalls>0?'#10b981':'#94a3b8'}}>{s.activeCalls} акт.</span>
-            </div>
-            {lastUpdated && <span className="hide-mobile" style={{fontSize:11,color:'#475569'}}>{lastUpdated.toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>}
+
+            {lastUpdated && (
+              <span className="update-time">{lastUpdated.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            )}
           </div>
         </div>
 
-        {/* Табы */}
-        <div style={{display:'flex',gap:0,overflowX:'auto'}}>
-          {[['overview','📊 Обзор'],['contacts','👥 Контакты'],['logs','📋 История']].map(([key,label]) => (
-            <button key={key} onClick={() => setTab(key as Tab)} style={{background:'none',border:'none',cursor:'pointer',padding:'10px 16px',color:tab===key?'#fff':'#64748b',fontWeight:tab===key?600:400,borderBottom:tab===key?'2px solid #6366f1':'2px solid transparent',fontSize:13,whiteSpace:'nowrap',flexShrink:0}}>{label}</button>
+        {/* Навигация */}
+        <nav className="nav">
+          {([['overview', 'Обзор'], ['contacts', 'Контакты'], ['logs', 'История']] as const).map(([key, label]) => (
+            <button key={key} className={`nav-btn ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>
+              {label}
+              {tab === key && <span className="nav-indicator" />}
+            </button>
           ))}
-        </div>
-      </div>
+        </nav>
+      </header>
 
-      {/* Контент */}
-      <div style={{maxWidth:1280,margin:'0 auto',padding:'16px'}}>
+      {/* Основной контент */}
+      <main className="main">
 
-        {/* ===== ОБЗОР ===== */}
+        {/* ═══════ ОБЗОР ═══════ */}
         {tab === 'overview' && (
-          <div style={{display:'flex',flexDirection:'column',gap:16}}>
-
-            {/* Карточки статистики — 2 колонки на мобиле, 4 на десктопе */}
+          <div className="page">
+            {/* Статкарточки */}
             <div className="stats-grid">
-              <StatCard label="Всего контактов" value={fmt(s.total)} sub={`Ожидают: ${s.dueForCall}`} color="#6366f1" icon="👥" />
-              <StatCard label="Всего звонков" value={fmt(s.totalCalls)} sub={`Дозвон: ${reachRate}%`} color="#3b82f6" icon="📞" />
-              <StatCard label="Лидов" value={fmt(s.leads)} sub={`Конверсия: ${leadRate}%`} color="#10b981" icon="🎯" />
-              <StatCard label="Ср. длительность" value={avgDur>0?fmtDur(avgDur):'—'} sub={`Всего: ${fmtDur(s.totalDurationSec)}`} color="#f59e0b" icon="⏱️" />
+              <StatCard label="Контактов" value={fmt(s.total)} sub={`${s.dueForCall} ожидают`} accent="#818cf8" icon="◎" />
+              <StatCard label="Звонков" value={fmt(s.totalCalls)} sub={`Дозвон ${reachRate}%`} accent="#38bdf8" icon="◈" />
+              <StatCard label="Лидов" value={fmt(s.leads)} sub={`Конверсия ${leadRate}%`} accent="#34d399" icon="◆" />
+              <StatCard label="Ср. время" value={avgDur > 0 ? fmtDur(avgDur) : '—'} sub={fmtDur(s.totalDurationSec)} accent="#fb923c" icon="◷" />
             </div>
 
-            {/* Воронка + Статусы — стекаются на мобиле */}
+            {/* Воронка + правая панель */}
             <div className="overview-grid">
-              <div style={{background:'#fff',borderRadius:16,padding:20,boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}>
-                <h3 style={{margin:'0 0 16px',fontSize:15,fontWeight:600}}>Воронка</h3>
-                {[{label:'Загружено',value:s.total,color:'#6366f1'},{label:'Дозвонились',value:s.answeredCalls,color:'#3b82f6'},{label:'Квалифицировано',value:s.leads,color:'#10b981'},{label:'Отказ',value:s.rejected,color:'#ef4444'},{label:'Нет ответа',value:s.noAnswer,color:'#94a3b8'}].map(item => (
-                  <div key={item.label} style={{marginBottom:12}}>
-                    <div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}><span style={{fontSize:13,color:'#374151'}}>{item.label}</span><span style={{fontSize:13,fontWeight:600}}>{fmt(item.value)}</span></div>
-                    <MiniBar value={item.value} max={s.total||1} color={item.color} />
-                  </div>
-                ))}
+              {/* Воронка */}
+              <div className="card">
+                <div className="card-header">
+                  <h2 className="card-title">Воронка продаж</h2>
+                </div>
+                <div className="funnel">
+                  <FunnelBar value={s.total} max={s.total || 1} color="#818cf8" label="Загружено" count={s.total} />
+                  <FunnelBar value={s.answeredCalls} max={s.total || 1} color="#38bdf8" label="Дозвонились" count={s.answeredCalls} />
+                  <FunnelBar value={s.leads} max={s.total || 1} color="#34d399" label="Лиды" count={s.leads} />
+                  <FunnelBar value={s.rejected} max={s.total || 1} color="#f87171" label="Отказ" count={s.rejected} />
+                  <FunnelBar value={s.noAnswer} max={s.total || 1} color="#475569" label="Нет ответа" count={s.noAnswer} />
+                </div>
               </div>
 
-              <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                <div style={{background:'#fff',borderRadius:16,padding:20,boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}>
-                  <h3 style={{margin:'0 0 14px',fontSize:15,fontWeight:600}}>Статусы</h3>
-                  {[{label:'🆕 Новых',value:s.new,color:'#6366f1'},{label:'🔄 В работе',value:s.inProgress,color:'#f59e0b'},{label:'🎯 Лидов',value:s.leads,color:'#10b981'},{label:'❌ Отказов',value:s.rejected,color:'#ef4444'},{label:'📵 Нет ответа',value:s.noAnswer,color:'#6b7280'}].map(item => (
-                    <div key={item.label} style={{display:'flex',justifyContent:'space-between',marginBottom:8}}><span style={{fontSize:13}}>{item.label}</span><span style={{fontSize:14,fontWeight:700,color:item.color}}>{fmt(item.value)}</span></div>
-                  ))}
+              {/* Правая колонка */}
+              <div className="right-col">
+                {/* Статусы */}
+                <div className="card">
+                  <div className="card-header">
+                    <h2 className="card-title">Статусы</h2>
+                  </div>
+                  <div className="status-list">
+                    {[
+                      { label: 'Новых', value: s.new, color: '#818cf8' },
+                      { label: 'В работе', value: s.inProgress, color: '#fbbf24' },
+                      { label: 'Лидов', value: s.leads, color: '#34d399' },
+                      { label: 'Отказов', value: s.rejected, color: '#f87171' },
+                      { label: 'Нет ответа', value: s.noAnswer, color: '#64748b' },
+                    ].map(item => (
+                      <div key={item.label} className="status-row">
+                        <div className="status-dot" style={{ background: item.color }} />
+                        <span className="status-name">{item.label}</span>
+                        <span className="status-val" style={{ color: item.color }}>{fmt(item.value)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div style={{background:'#fff',borderRadius:16,padding:20,boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}>
-                  <h3 style={{margin:'0 0 14px',fontSize:15,fontWeight:600}}>Квалификация лидов</h3>
-                  {[{label:'💰 С бюджетом',value:lq.withBudget},{label:'✅ С задачей',value:lq.withTask},{label:'👔 ЛПР',value:lq.decisionMaker}].map(item => (
-                    <div key={item.label} style={{display:'flex',justifyContent:'space-between',marginBottom:8}}><span style={{fontSize:13}}>{item.label}</span><span style={{fontSize:14,fontWeight:700,color:'#10b981'}}>{item.value}</span></div>
-                  ))}
+
+                {/* Квалификация */}
+                <div className="card">
+                  <div className="card-header">
+                    <h2 className="card-title">Квалификация</h2>
+                  </div>
+                  <div className="status-list">
+                    {[
+                      { label: 'С бюджетом', value: lq.withBudget },
+                      { label: 'С задачей', value: lq.withTask },
+                      { label: 'ЛПР', value: lq.decisionMaker },
+                    ].map(item => (
+                      <div key={item.label} className="status-row">
+                        <div className="status-dot" style={{ background: '#34d399' }} />
+                        <span className="status-name">{item.label}</span>
+                        <span className="status-val" style={{ color: '#34d399' }}>{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Быстрые действия */}
-            <div style={{background:'#fff',borderRadius:16,padding:20,boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}>
-              <h3 style={{margin:'0 0 14px',fontSize:15,fontWeight:600}}>Быстрые действия</h3>
-              <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-                <button onClick={toggleAutoDial} disabled={toggleLoading} className="action-btn" style={{padding:'10px 18px',borderRadius:10,border:'none',cursor:'pointer',fontWeight:600,fontSize:14,background:s.autoDialEnabled?'#fee2e2':'#d1fae5',color:s.autoDialEnabled?'#ef4444':'#10b981'}}>
-                  {s.autoDialEnabled?'⏸ Остановить':'▶️ Запустить дозвон'}
+            <div className="card">
+              <div className="card-header">
+                <h2 className="card-title">Управление</h2>
+              </div>
+              <div className="actions-row">
+                <button className={`action-btn primary ${s.autoDialEnabled ? 'danger' : 'success'}`} onClick={toggleAutoDial} disabled={toggleLoading}>
+                  {s.autoDialEnabled ? '⏸ Остановить дозвон' : '▶ Запустить дозвон'}
                 </button>
-                <button onClick={() => setTab('contacts')} className="action-btn" style={{padding:'10px 18px',borderRadius:10,border:'none',cursor:'pointer',fontWeight:600,fontSize:14,background:'#ede9fe',color:'#7c3aed'}}>👥 Контакты</button>
-                <button onClick={() => {fetchStats();fetchContacts();notify('🔄 Обновлено')}} className="action-btn" style={{padding:'10px 18px',borderRadius:10,border:'1px solid #e2e8f0',cursor:'pointer',fontWeight:600,fontSize:14,background:'#fff',color:'#64748b'}}>🔄 Обновить</button>
+                <button className="action-btn secondary" onClick={() => setTab('contacts')}>
+                  Управление контактами
+                </button>
+                <button className="action-btn ghost" onClick={() => { fetchStats(); fetchContacts(); notify('Данные обновлены') }}>
+                  ↻ Обновить
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ===== КОНТАКТЫ ===== */}
+        {/* ═══════ КОНТАКТЫ ═══════ */}
         {tab === 'contacts' && (
-          <div style={{display:'flex',flexDirection:'column',gap:16}}>
-
-            {/* Google Sheets */}
-            <div style={{background:'#fff',borderRadius:16,padding:20,boxShadow:'0 1px 3px rgba(0,0,0,0.08)',border:'2px solid #e0f2fe'}}>
-              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
-                <span style={{fontSize:24}}>📊</span>
+          <div className="page">
+            {/* Импорт Google Sheets */}
+            <div className="card import-card sheets">
+              <div className="import-header">
+                <div className="import-icon sheets-icon">GS</div>
                 <div>
-                  <h3 style={{margin:0,fontSize:15,fontWeight:600}}>Импорт из Google Sheets</h3>
-                  <p style={{margin:'3px 0 0',fontSize:12,color:'#64748b'}}>Загружайте базу пачками по 500–5000 контактов</p>
+                  <h3 className="card-title">Google Sheets</h3>
+                  <p className="card-sub">Пачками до 5000 контактов</p>
                 </div>
               </div>
-              <div style={{background:'#f0f9ff',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:12,color:'#0369a1'}}>
-                ℹ️ Сделайте таблицу публичной. Колонки: <b>Phone</b>, Name, Email
+              <div className="import-hint">
+                Сделайте таблицу публичной. Колонки: <strong>Phone</strong> (обязательно), Name, Email
               </div>
-              <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                <input value={sheetsUrl} onChange={e => setSheetsUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." style={{width:'100%',padding:'10px 14px',borderRadius:10,border:'1.5px solid #e2e8f0',fontSize:14,outline:'none',boxSizing:'border-box'}} />
-                <div style={{display:'flex',gap:10}}>
-                  <select value={sheetsBatch} onChange={e => setSheetsBatch(e.target.value)} style={{padding:'10px 14px',borderRadius:10,border:'1.5px solid #e2e8f0',fontSize:14,outline:'none',background:'#fff'}}>
-                    <option value="100">100</option><option value="250">250</option>
-                    <option value="500">500</option><option value="1000">1000</option><option value="5000">5000</option>
+              <div className="import-form">
+                <input
+                  className="field"
+                  value={sheetsUrl}
+                  onChange={e => setSheetsUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                />
+                <div className="import-row">
+                  <select className="field select" value={sheetsBatch} onChange={e => setSheetsBatch(e.target.value)}>
+                    {['100', '250', '500', '1000', '5000'].map(v => <option key={v} value={v}>{v} строк</option>)}
                   </select>
-                  <button onClick={importFromSheets} disabled={sheetsLoading} style={{flex:1,padding:'10px 20px',borderRadius:10,border:'none',cursor:sheetsLoading?'wait':'pointer',background:'#0369a1',color:'#fff',fontWeight:600,fontSize:14}}>
-                    {sheetsLoading ? '⏳ Загружаем...' : '📥 Импортировать'}
+                  <button className="action-btn primary" onClick={importFromSheets} disabled={sheetsLoading}>
+                    {sheetsLoading ? '⏳ Загрузка...' : '↓ Импортировать'}
                   </button>
                 </div>
               </div>
               {sheetsResult && !sheetsResult.error && (
-                <div style={{marginTop:10,padding:'10px 14px',background:'#f0fdf4',borderRadius:10,fontSize:13,color:'#166534'}}>
-                  ✅ Всего: <b>{sheetsResult.total}</b> | Импорт: <b>{sheetsResult.imported}</b> | Дубли: <b>{sheetsResult.duplicates}</b>
+                <div className="import-result success">
+                  Импортировано <strong>{sheetsResult.imported}</strong> из {sheetsResult.total} · Дубли: {sheetsResult.duplicates}
                 </div>
               )}
-              {sheetsResult?.error && <div style={{marginTop:10,padding:'10px 14px',background:'#fef2f2',borderRadius:10,fontSize:13,color:'#991b1b'}}>❌ {sheetsResult.error}</div>}
+              {sheetsResult?.error && <div className="import-result error">{sheetsResult.error}</div>}
             </div>
 
             {/* CSV */}
-            <div style={{background:'#fff',borderRadius:16,padding:20,boxShadow:'0 1px 3px rgba(0,0,0,0.08)',border:'2px solid #fef3c7'}}>
-              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
-                <span style={{fontSize:24}}>📄</span>
+            <div className="card import-card csv">
+              <div className="import-header">
+                <div className="import-icon csv-icon">CSV</div>
                 <div>
-                  <h3 style={{margin:0,fontSize:15,fontWeight:600}}>Импорт из CSV</h3>
-                  <p style={{margin:'3px 0 0',fontSize:12,color:'#64748b'}}>Excel/CSV сохранённый в формате CSV (UTF-8)</p>
+                  <h3 className="card-title">CSV файл</h3>
+                  <p className="card-sub">Excel/CSV в кодировке UTF-8</p>
                 </div>
               </div>
-              <input ref={csvRef} type="file" accept=".csv,.txt" style={{display:'none'}} onChange={e => { if (e.target.files?.[0]) importCsv(e.target.files[0]) }} />
-              <button onClick={() => csvRef.current?.click()} disabled={csvLoading} style={{width:'100%',padding:'12px 20px',borderRadius:10,border:'none',cursor:csvLoading?'wait':'pointer',background:'#d97706',color:'#fff',fontWeight:600,fontSize:14}}>
-                {csvLoading ? '⏳ Загружаем...' : '📁 Выбрать CSV файл'}
+              <input ref={csvRef} type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) importCsv(e.target.files[0]) }} />
+              <button className="action-btn secondary full-width" onClick={() => csvRef.current?.click()} disabled={csvLoading}>
+                {csvLoading ? '⏳ Загрузка...' : '↑ Выбрать файл'}
               </button>
               {csvResult && !csvResult.error && (
-                <div style={{marginTop:10,padding:'10px 14px',background:'#f0fdf4',borderRadius:10,fontSize:13,color:'#166534'}}>
-                  ✅ Всего: <b>{csvResult.total}</b> | Импорт: <b>{csvResult.imported}</b> | Дубли: <b>{csvResult.duplicates}</b>
+                <div className="import-result success">
+                  Импортировано <strong>{csvResult.imported}</strong> из {csvResult.total} · Дубли: {csvResult.duplicates}
                 </div>
               )}
-              {csvResult?.error && <div style={{marginTop:10,padding:'10px 14px',background:'#fef2f2',borderRadius:10,fontSize:13,color:'#991b1b'}}>❌ {csvResult.error}</div>}
+              {csvResult?.error && <div className="import-result error">{csvResult.error}</div>}
             </div>
 
             {/* Добавить вручную */}
-            <div style={{background:'#fff',borderRadius:16,padding:20,boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}>
-              <h3 style={{margin:'0 0 14px',fontSize:15,fontWeight:600}}>➕ Добавить вручную</h3>
-              <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                <input value={addPhone} onChange={e => setAddPhone(e.target.value)} placeholder="+79001234567" onKeyDown={e => e.key==='Enter' && addContact()} style={{padding:'10px 14px',borderRadius:10,border:'1.5px solid #e2e8f0',fontSize:14,outline:'none'}} />
-                <input value={addName} onChange={e => setAddName(e.target.value)} placeholder="Имя (необязательно)" onKeyDown={e => e.key==='Enter' && addContact()} style={{padding:'10px 14px',borderRadius:10,border:'1.5px solid #e2e8f0',fontSize:14,outline:'none'}} />
-                <button onClick={addContact} disabled={addLoading} style={{padding:'12px',borderRadius:10,border:'none',cursor:'pointer',background:'#6366f1',color:'#fff',fontWeight:600,fontSize:14}}>{addLoading?'...':'Добавить'}</button>
+            <div className="card">
+              <div className="card-header">
+                <h2 className="card-title">Добавить контакт</h2>
               </div>
-              {addError && <div style={{color:'#ef4444',fontSize:13,marginTop:8}}>⚠️ {addError}</div>}
+              <div className="add-form">
+                <input className="field" value={addPhone} onChange={e => setAddPhone(e.target.value)} placeholder="+79001234567" onKeyDown={e => e.key === 'Enter' && addContact()} />
+                <input className="field" value={addName} onChange={e => setAddName(e.target.value)} placeholder="Имя (необязательно)" onKeyDown={e => e.key === 'Enter' && addContact()} />
+                <button className="action-btn primary" onClick={addContact} disabled={addLoading}>{addLoading ? '...' : '+ Добавить'}</button>
+              </div>
+              {addError && <div className="field-error">{addError}</div>}
             </div>
 
             {/* Фильтры */}
-            <div style={{display:'flex',flexDirection:'column',gap:10}}>
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Поиск по имени или телефону" style={{padding:'10px 14px',borderRadius:10,border:'1.5px solid #e2e8f0',fontSize:14,outline:'none'}} />
-              <div style={{display:'flex',gap:10,alignItems:'center'}}>
-                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{flex:1,padding:'10px 14px',borderRadius:10,border:'1.5px solid #e2e8f0',fontSize:14,outline:'none',background:'#fff'}}>
-                  <option value="all">Все статусы</option>
-                  {Object.entries(STATUS_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-                <span style={{fontSize:13,color:'#64748b',whiteSpace:'nowrap'}}>{filtered.length} из {contacts.length}</span>
-              </div>
+            <div className="filters">
+              <input className="field search-field" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск..." />
+              <select className="field select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                <option value="all">Все статусы</option>
+                {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+              <span className="count-badge">{filtered.length} / {contacts.length}</span>
             </div>
 
-            {/* Карточки контактов на мобиле */}
+            {/* Список контактов */}
             {filtered.length === 0 ? (
-              <div style={{background:'#fff',borderRadius:16,padding:48,textAlign:'center',color:'#94a3b8',boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}>
-                <div style={{fontSize:40,marginBottom:12}}>📭</div>
-                <div>{search||statusFilter!=='all'?'Ничего не найдено':'Нет контактов. Добавьте или импортируйте!'}</div>
+              <div className="empty-state">
+                <div className="empty-icon">◎</div>
+                <div>{search || statusFilter !== 'all' ? 'Ничего не найдено' : 'Нет контактов — добавьте или импортируйте'}</div>
               </div>
             ) : (
               <>
-                {/* Мобиль: карточки */}
-                <div className="contacts-mobile">
-                  {filtered.slice(0,100).map(c => (
-                    <div key={c.id} style={{background:'#fff',borderRadius:14,padding:'14px 16px',boxShadow:'0 1px 3px rgba(0,0,0,0.08)',display:'flex',alignItems:'center',gap:12}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:600,fontSize:14,marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.name}</div>
-                        <div style={{fontSize:13,color:'#64748b',fontFamily:'monospace',marginBottom:6}}>{c.phone}</div>
-                        <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+                {/* Мобиль — карточки */}
+                <div className="contact-cards">
+                  {filtered.slice(0, 100).map(c => (
+                    <div key={c.id} className="contact-card">
+                      <div className="contact-info">
+                        <div className="contact-name">{c.name}</div>
+                        <div className="contact-phone">{c.phone}</div>
+                        <div className="contact-meta">
                           <Badge status={c.status} />
-                          <span style={{fontSize:11,color:'#94a3b8'}}>{c.attemptCount} поп.</span>
-                          {c.lastCallResult && <span style={{fontSize:11,color:'#94a3b8'}}>{RESULT_LABELS[c.lastCallResult]||''}</span>}
+                          <span className="attempt-count">{c.attemptCount} поп.</span>
+                          {c.lastCallResult && (
+                            <span className="result-chip" data-result={c.lastCallResult}>
+                              {RESULT_ICONS[c.lastCallResult] || '?'} {RESULT_LABELS[c.lastCallResult] || c.lastCallResult}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <div style={{display:'flex',flexDirection:'column',gap:6,flexShrink:0}}>
-                        <button onClick={() => initiateCall(c.id,c.name)} disabled={callLoading===c.id} style={{padding:'8px 12px',borderRadius:8,border:'none',cursor:'pointer',background:'#d1fae5',color:'#10b981',fontWeight:600,fontSize:13}}>{callLoading===c.id?'...':'📞'}</button>
-                        <button onClick={() => deleteContact(c.id,c.name)} style={{padding:'8px 12px',borderRadius:8,border:'none',cursor:'pointer',background:'#fee2e2',color:'#ef4444',fontWeight:600,fontSize:13}}>🗑️</button>
+                      <div className="contact-actions">
+                        <button className="icon-btn call" onClick={() => initiateCall(c.id, c.name)} disabled={callLoading === c.id}>
+                          {callLoading === c.id ? '…' : '↗'}
+                        </button>
+                        <button className="icon-btn del" onClick={() => deleteContact(c.id, c.name)}>✕</button>
                       </div>
                     </div>
                   ))}
                 </div>
-                {/* Десктоп: таблица */}
-                <div className="contacts-desktop" style={{background:'#fff',borderRadius:16,boxShadow:'0 1px 3px rgba(0,0,0,0.08)',overflow:'hidden'}}>
-                  <div style={{overflowX:'auto'}}>
-                    <table style={{width:'100%',borderCollapse:'collapse',minWidth:700}}>
+
+                {/* Десктоп — таблица */}
+                <div className="card table-card">
+                  <div className="table-wrap">
+                    <table className="table">
                       <thead>
-                        <tr style={{background:'#f8fafc',borderBottom:'1px solid #e2e8f0'}}>
-                          {['Имя','Телефон','Статус','Попыток','Последний звонок','Результат','Действия'].map(h => (
-                            <th key={h} style={{padding:'12px 16px',textAlign:'left',fontSize:12,color:'#64748b',fontWeight:600,whiteSpace:'nowrap'}}>{h}</th>
+                        <tr>
+                          {['Имя', 'Телефон', 'Статус', 'Попыток', 'Последний звонок', 'Результат', ''].map(h => (
+                            <th key={h}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {filtered.slice(0,100).map((c,i) => (
-                          <tr key={c.id} style={{borderBottom:'1px solid #f1f5f9',background:i%2===0?'#fff':'#fafafa'}}>
-                            <td style={{padding:'12px 16px',fontWeight:500,fontSize:14}}>{c.name}</td>
-                            <td style={{padding:'12px 16px',fontSize:14,fontFamily:'monospace'}}>{c.phone}</td>
-                            <td style={{padding:'12px 16px'}}><Badge status={c.status} /></td>
-                            <td style={{padding:'12px 16px',fontSize:14,color:'#64748b',textAlign:'center'}}>{c.attemptCount}</td>
-                            <td style={{padding:'12px 16px',fontSize:13,color:'#64748b'}}>{fmtDate(c.lastCallAt)}</td>
-                            <td style={{padding:'12px 16px',fontSize:13}}>{RESULT_LABELS[c.lastCallResult||'']||'—'}</td>
-                            <td style={{padding:'12px 16px'}}>
-                              <div style={{display:'flex',gap:8}}>
-                                <button onClick={() => initiateCall(c.id,c.name)} disabled={callLoading===c.id} style={{padding:'6px 12px',borderRadius:8,border:'none',cursor:'pointer',background:'#d1fae5',color:'#10b981',fontWeight:600,fontSize:12}}>{callLoading===c.id?'...':'📞'}</button>
-                                <button onClick={() => deleteContact(c.id,c.name)} style={{padding:'6px 12px',borderRadius:8,border:'none',cursor:'pointer',background:'#fee2e2',color:'#ef4444',fontWeight:600,fontSize:12}}>🗑️</button>
+                        {filtered.slice(0, 100).map(c => (
+                          <tr key={c.id}>
+                            <td className="td-name">{c.name}</td>
+                            <td className="td-phone">{c.phone}</td>
+                            <td><Badge status={c.status} /></td>
+                            <td className="td-center">{c.attemptCount}</td>
+                            <td className="td-muted">{fmtDate(c.lastCallAt)}</td>
+                            <td>
+                              {c.lastCallResult && (
+                                <span className="result-chip" data-result={c.lastCallResult}>
+                                  {RESULT_ICONS[c.lastCallResult]} {RESULT_LABELS[c.lastCallResult] || c.lastCallResult}
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <div className="td-actions">
+                                <button className="icon-btn call" onClick={() => initiateCall(c.id, c.name)} disabled={callLoading === c.id}>
+                                  {callLoading === c.id ? '…' : '↗'}
+                                </button>
+                                <button className="icon-btn del" onClick={() => deleteContact(c.id, c.name)}>✕</button>
                               </div>
                             </td>
                           </tr>
@@ -431,62 +520,422 @@ export function Dashboard() {
                       </tbody>
                     </table>
                   </div>
-                  {filtered.length > 100 && <div style={{padding:'12px 16px',textAlign:'center',fontSize:13,color:'#94a3b8',borderTop:'1px solid #f1f5f9'}}>Показано 100 из {filtered.length}. Используйте поиск.</div>}
+                  {filtered.length > 100 && (
+                    <div className="table-footer">Показано 100 из {filtered.length} — уточните поиск</div>
+                  )}
                 </div>
               </>
             )}
           </div>
         )}
 
-        {/* ===== ИСТОРИЯ ===== */}
+        {/* ═══════ ИСТОРИЯ ═══════ */}
         {tab === 'logs' && (
-          <div style={{background:'#fff',borderRadius:16,boxShadow:'0 1px 3px rgba(0,0,0,0.08)',overflow:'hidden'}}>
-            <div style={{padding:'18px 20px',borderBottom:'1px solid #f1f5f9'}}><h3 style={{margin:0,fontSize:15,fontWeight:600}}>📋 История звонков</h3></div>
-            <div style={{padding:48,textAlign:'center',color:'#94a3b8'}}>
-              <div style={{fontSize:40,marginBottom:12}}>📋</div>
-              <div>История появится после первых звонков</div>
+          <div className="page">
+            <div className="card">
+              <div className="card-header">
+                <h2 className="card-title">История звонков</h2>
+              </div>
+              <div className="empty-state">
+                <div className="empty-icon">◈</div>
+                <div>История появится после первых звонков</div>
+              </div>
             </div>
           </div>
         )}
-      </div>
+      </main>
 
       <style>{`
-        * { box-sizing: border-box }
-        button:hover:not(:disabled) { opacity: 0.85 }
-        input:focus, select:focus { border-color: #6366f1 !important }
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-        /* Статистика: 2 колонки всегда, 4 на широком экране */
-        .stats-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+          --bg: #090d14;
+          --bg2: #0e1520;
+          --bg3: #131c2b;
+          --bg4: #1a2438;
+          --border: rgba(255,255,255,0.07);
+          --border2: rgba(255,255,255,0.12);
+          --text: #e2e8f0;
+          --text2: #94a3b8;
+          --text3: #475569;
+          --green: #34d399;
+          --blue: #38bdf8;
+          --indigo: #818cf8;
+          --orange: #fb923c;
+          --red: #f87171;
+          --yellow: #fbbf24;
+          --font: 'Space Grotesk', sans-serif;
+          --mono: 'JetBrains Mono', monospace;
+          --r: 12px;
+          --r2: 8px;
         }
 
-        /* Воронка + Статусы: стек на мобиле, 2 колонки на десктопе */
-        .overview-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 16px;
+        body { background: var(--bg); color: var(--text); font-family: var(--font); }
+
+        /* ── SPLASH ── */
+        .splash {
+          min-height: 100vh; display: flex; align-items: center; justify-content: center;
+          background: var(--bg);
+        }
+        .splash-inner { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+        .splash-logo { animation: spin 3s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .splash-text { color: var(--text2); font-size: 14px; letter-spacing: .1em; text-transform: uppercase; }
+        .splash-bar { width: 200px; height: 2px; background: var(--bg4); border-radius: 2px; overflow: hidden; }
+        .splash-fill { height: 100%; width: 40%; background: var(--green); border-radius: 2px; animation: loading 1.5s ease-in-out infinite; }
+        @keyframes loading { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+
+        /* ── APP ── */
+        .app { min-height: 100vh; display: flex; flex-direction: column; }
+
+        /* ── HEADER ── */
+        .header {
+          background: var(--bg2);
+          border-bottom: 1px solid var(--border);
+          position: sticky; top: 0; z-index: 100;
+          backdrop-filter: blur(20px);
+        }
+        .header-inner {
+          max-width: 1400px; margin: 0 auto;
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0 20px; height: 56px; gap: 16px;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .brand-icon {
+          width: 34px; height: 34px; background: linear-gradient(135deg, #34d39930, #34d39910);
+          border: 1px solid #34d39940; border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
+          color: var(--green);
+        }
+        .brand-name { font-weight: 700; font-size: 15px; letter-spacing: -.02em; color: var(--text); }
+        .error-badge {
+          font-size: 11px; color: var(--red); background: #f8717115;
+          border: 1px solid #f8717130; border-radius: 4px; padding: 2px 8px;
         }
 
-        /* Контакты: карточки на мобиле, таблица на десктопе */
-        .contacts-mobile { display: flex; flex-direction: column; gap: 10px; }
-        .contacts-desktop { display: none; }
+        .header-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
-        /* Скрыть время на мобиле */
-        .hide-mobile { display: none; }
+        .active-pill {
+          display: flex; align-items: center; gap: 6px;
+          background: var(--bg3); border: 1px solid var(--border);
+          border-radius: 20px; padding: 5px 12px; font-size: 12px; color: var(--text2);
+        }
+        .active-pill[data-active="true"] { border-color: #34d39940; color: var(--green); background: #34d39910; }
+        .pulse-dot {
+          width: 6px; height: 6px; border-radius: 50%; background: var(--text3);
+          flex-shrink: 0;
+        }
+        .active-pill[data-active="true"] .pulse-dot {
+          background: var(--green);
+          box-shadow: 0 0 0 0 #34d39960;
+          animation: pulse 2s ease-out infinite;
+        }
+        @keyframes pulse {
+          0% { box-shadow: 0 0 0 0 #34d39960; }
+          70% { box-shadow: 0 0 0 6px #34d39900; }
+          100% { box-shadow: 0 0 0 0 #34d39900; }
+        }
 
-        /* Кнопки действий — растягиваются на мобиле */
-        .action-btn { flex: 1; min-width: 120px; }
+        .autodial-control { display: flex; align-items: center; gap: 8px; }
+        .control-label { font-size: 12px; color: var(--text3); }
+        .control-status { font-size: 12px; font-weight: 600; color: var(--text3); min-width: 32px; }
+        .control-status[data-on="true"] { color: var(--green); }
 
+        .update-time { font-size: 11px; color: var(--text3); font-family: var(--mono); display: none; }
+        @media (min-width: 640px) { .update-time { display: block; } }
+
+        /* ── TOGGLE ── */
+        .toggle {
+          width: 44px; height: 24px; border-radius: 12px; border: none;
+          background: var(--bg4); cursor: pointer; position: relative;
+          transition: background .2s; flex-shrink: 0;
+          outline: 1px solid var(--border);
+        }
+        .toggle.on { background: #34d39920; outline-color: #34d39960; }
+        .toggle-knob {
+          position: absolute; top: 3px; left: 3px;
+          width: 18px; height: 18px; border-radius: 50%;
+          background: var(--text3); transition: left .2s, background .2s;
+        }
+        .toggle.on .toggle-knob { left: 23px; background: var(--green); }
+
+        /* ── NAV ── */
+        .nav {
+          max-width: 1400px; margin: 0 auto;
+          display: flex; padding: 0 20px; gap: 2px;
+          overflow-x: auto;
+        }
+        .nav-btn {
+          background: none; border: none; cursor: pointer;
+          padding: 10px 16px; font-size: 13px; font-weight: 500;
+          color: var(--text3); position: relative;
+          transition: color .15s; white-space: nowrap; flex-shrink: 0;
+          font-family: var(--font);
+        }
+        .nav-btn:hover { color: var(--text2); }
+        .nav-btn.active { color: var(--text); }
+        .nav-indicator {
+          position: absolute; bottom: 0; left: 12px; right: 12px;
+          height: 2px; background: var(--green); border-radius: 2px 2px 0 0;
+        }
+
+        /* ── MAIN ── */
+        .main { flex: 1; max-width: 1400px; width: 100%; margin: 0 auto; padding: 20px; }
+        .page { display: flex; flex-direction: column; gap: 16px; }
+
+        /* ── STAT CARDS ── */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (min-width: 640px) { .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 16px; } }
+
+        .stat-card {
+          background: var(--bg2); border: 1px solid var(--border);
+          border-radius: var(--r); padding: 20px;
+          position: relative; overflow: hidden;
+          transition: border-color .2s, transform .2s;
+        }
+        .stat-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+        .stat-icon {
+          font-size: 18px; color: var(--accent, var(--indigo));
+          margin-bottom: 12px; display: block;
+        }
+        .stat-value {
+          font-size: 28px; font-weight: 700;
+          color: var(--text); line-height: 1;
+          font-variant-numeric: tabular-nums;
+          margin-bottom: 6px;
+        }
+        .stat-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; }
+        .stat-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+        .stat-glow {
+          position: absolute; top: -20px; right: -20px;
+          width: 80px; height: 80px; border-radius: 50%;
+          background: var(--accent, var(--indigo));
+          opacity: .06; filter: blur(20px);
+          pointer-events: none;
+        }
+
+        /* ── OVERVIEW GRID ── */
+        .overview-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        @media (min-width: 900px) { .overview-grid { grid-template-columns: 1.5fr 1fr; } }
+        .right-col { display: flex; flex-direction: column; gap: 16px; }
+
+        /* ── CARD ── */
+        .card {
+          background: var(--bg2); border: 1px solid var(--border);
+          border-radius: var(--r); overflow: hidden;
+        }
+        .card-header { padding: 18px 20px 0; }
+        .card-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text2); }
+        .card-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+        /* ── FUNNEL ── */
+        .funnel { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+        .funnel-row {}
+        .funnel-label { display: flex; justify-content: space-between; margin-bottom: 6px; }
+        .funnel-label span:first-child { font-size: 13px; color: var(--text2); }
+        .funnel-count { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--mono); }
+        .funnel-track {
+          height: 6px; background: var(--bg4); border-radius: 3px;
+          overflow: visible; position: relative;
+        }
+        .funnel-fill {
+          height: 100%; border-radius: 3px;
+          transition: width .6s cubic-bezier(.4,0,.2,1);
+          min-width: 2px;
+        }
+        .funnel-pct { position: absolute; right: 0; top: -18px; font-size: 11px; color: var(--text3); font-family: var(--mono); }
+
+        /* ── STATUS LIST ── */
+        .status-list { padding: 14px 20px 18px; display: flex; flex-direction: column; gap: 10px; }
+        .status-row { display: flex; align-items: center; gap: 10px; }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+        .status-name { font-size: 13px; color: var(--text2); flex: 1; }
+        .status-val { font-size: 14px; font-weight: 700; font-family: var(--mono); }
+
+        /* ── ACTIONS ── */
+        .actions-row { padding: 14px 20px 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+        .action-btn {
+          padding: 9px 18px; border-radius: var(--r2); border: none;
+          cursor: pointer; font-size: 13px; font-weight: 600;
+          font-family: var(--font); transition: all .15s;
+          white-space: nowrap;
+        }
+        .action-btn:disabled { opacity: .5; cursor: not-allowed; }
+        .action-btn.primary { background: var(--green); color: #0a1a12; }
+        .action-btn.primary:hover:not(:disabled) { background: #5eead4; }
+        .action-btn.primary.danger { background: var(--red); color: #1a0a0a; }
+        .action-btn.primary.danger:hover:not(:disabled) { background: #fca5a5; }
+        .action-btn.primary.success { background: var(--green); color: #0a1a12; }
+        .action-btn.secondary {
+          background: var(--bg4); color: var(--text);
+          border: 1px solid var(--border2);
+        }
+        .action-btn.secondary:hover:not(:disabled) { background: var(--bg3); border-color: var(--border2); }
+        .action-btn.ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+        .action-btn.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--border2); }
+        .action-btn.full-width { width: 100%; }
+
+        /* ── IMPORT CARDS ── */
+        .import-card { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+        .import-card.sheets { border-color: #38bdf830; }
+        .import-card.csv { border-color: #fbbf2430; }
+        .import-header { display: flex; align-items: center; gap: 14px; }
+        .import-icon {
+          width: 40px; height: 40px; border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 11px; font-weight: 700; font-family: var(--mono);
+          flex-shrink: 0;
+        }
+        .sheets-icon { background: #38bdf815; color: var(--blue); border: 1px solid #38bdf830; }
+        .csv-icon { background: #fbbf2415; color: var(--yellow); border: 1px solid #fbbf2430; }
+        .import-hint {
+          font-size: 12px; color: var(--text3);
+          background: var(--bg3); padding: 10px 14px; border-radius: var(--r2);
+          line-height: 1.6;
+        }
+        .import-hint strong { color: var(--text2); }
+        .import-form { display: flex; flex-direction: column; gap: 10px; }
+        .import-row { display: flex; gap: 10px; }
+        .import-result {
+          font-size: 12px; padding: 10px 14px; border-radius: var(--r2);
+        }
+        .import-result.success { background: #34d39915; color: var(--green); border: 1px solid #34d39930; }
+        .import-result.error { background: #f8717115; color: var(--red); border: 1px solid #f8717130; }
+
+        /* ── FIELDS ── */
+        .field {
+          background: var(--bg3); border: 1px solid var(--border);
+          border-radius: var(--r2); padding: 9px 14px;
+          font-size: 13px; color: var(--text); font-family: var(--font);
+          outline: none; transition: border-color .15s; width: 100%;
+        }
+        .field::placeholder { color: var(--text3); }
+        .field:focus { border-color: #34d39960; }
+        .select { width: auto; min-width: 120px; flex-shrink: 0; cursor: pointer; }
+        .field-error { font-size: 12px; color: var(--red); margin-top: -4px; }
+
+        /* ── ADD FORM ── */
+        .add-form { padding: 16px 20px 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .add-form .field { flex: 1; min-width: 140px; }
+        .add-form .action-btn { flex-shrink: 0; }
+
+        /* ── FILTERS ── */
+        .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .search-field { flex: 1; min-width: 180px; }
+        .count-badge {
+          font-size: 12px; color: var(--text3); font-family: var(--mono);
+          white-space: nowrap;
+        }
+
+        /* ── EMPTY STATE ── */
+        .empty-state {
+          padding: 60px 20px; text-align: center;
+          color: var(--text3); display: flex; flex-direction: column; align-items: center; gap: 12px;
+        }
+        .empty-icon { font-size: 32px; color: var(--text3); opacity: .4; }
+
+        /* ── BADGE ── */
+        .badge {
+          display: inline-block;
+          background: color-mix(in srgb, var(--bc) 15%, transparent);
+          color: var(--bc);
+          border: 1px solid color-mix(in srgb, var(--bc) 30%, transparent);
+          border-radius: 4px; padding: 2px 8px;
+          font-size: 11px; font-weight: 600; white-space: nowrap;
+        }
+
+        /* ── RESULT CHIP ── */
+        .result-chip {
+          display: inline-flex; align-items: center; gap: 4px;
+          font-size: 11px; color: var(--text3);
+          background: var(--bg4); border-radius: 4px;
+          padding: 2px 8px; white-space: nowrap;
+        }
+        .result-chip[data-result="answered"] { color: var(--green); }
+        .result-chip[data-result="no_answer"] { color: var(--red); }
+        .result-chip[data-result="answering_machine"] { color: var(--yellow); }
+
+        /* ── CONTACT CARDS (mobile) ── */
+        .contact-cards { display: flex; flex-direction: column; gap: 8px; }
+        .contact-card {
+          background: var(--bg2); border: 1px solid var(--border);
+          border-radius: var(--r); padding: 14px 16px;
+          display: flex; align-items: center; gap: 12px;
+          transition: border-color .15s;
+        }
+        .contact-card:hover { border-color: var(--border2); }
+        .contact-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+        .contact-name { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .contact-phone { font-size: 12px; color: var(--text3); font-family: var(--mono); }
+        .contact-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .attempt-count { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+        .contact-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+
+        /* ── ICON BTNS ── */
+        .icon-btn {
+          width: 32px; height: 32px; border-radius: 6px; border: none;
+          cursor: pointer; font-size: 13px; display: flex;
+          align-items: center; justify-content: center;
+          transition: all .15s; font-weight: 700;
+        }
+        .icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+        .icon-btn.call { background: #34d39915; color: var(--green); border: 1px solid #34d39930; }
+        .icon-btn.call:hover:not(:disabled) { background: #34d39930; }
+        .icon-btn.del { background: #f8717115; color: var(--red); border: 1px solid #f8717130; }
+        .icon-btn.del:hover { background: #f8717130; }
+
+        /* ── TABLE ── */
+        .table-card { display: none; }
         @media (min-width: 640px) {
-          .stats-grid { grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; }
-          .overview-grid { grid-template-columns: 2fr 1fr; }
-          .contacts-mobile { display: none; }
-          .contacts-desktop { display: block; }
-          .hide-mobile { display: inline; }
-          .action-btn { flex: none; }
+          .contact-cards { display: none; }
+          .table-card { display: block; }
         }
+        .table-wrap { overflow-x: auto; }
+        .table { width: 100%; border-collapse: collapse; min-width: 700px; }
+        .table thead tr { border-bottom: 1px solid var(--border); }
+        .table th {
+          padding: 12px 16px; text-align: left;
+          font-size: 11px; font-weight: 600;
+          color: var(--text3); text-transform: uppercase;
+          letter-spacing: .06em; white-space: nowrap;
+        }
+        .table tbody tr {
+          border-bottom: 1px solid var(--border);
+          transition: background .1s;
+        }
+        .table tbody tr:hover { background: var(--bg3); }
+        .table tbody tr:last-child { border-bottom: none; }
+        .table td { padding: 12px 16px; font-size: 13px; vertical-align: middle; }
+        .td-name { font-weight: 500; color: var(--text); }
+        .td-phone { font-family: var(--mono); color: var(--text2); }
+        .td-center { text-align: center; color: var(--text2); font-family: var(--mono); }
+        .td-muted { color: var(--text3); }
+        .td-actions { display: flex; gap: 6px; }
+        .table-footer {
+          padding: 12px 16px; text-align: center;
+          font-size: 12px; color: var(--text3);
+          border-top: 1px solid var(--border);
+        }
+
+        /* ── NOTIFICATION ── */
+        .notif {
+          position: fixed; top: 16px; right: 16px; left: 16px;
+          z-index: 9999; padding: 12px 18px;
+          border-radius: var(--r); font-size: 13px; font-weight: 500;
+          display: flex; align-items: center; gap: 10px;
+          animation: slideIn .2s ease;
+          max-width: 420px; margin: 0 auto;
+        }
+        @media (min-width: 640px) {
+          .notif { left: auto; right: 20px; top: 20px; margin: 0; }
+        }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+        .notif.success { background: #0f2a1e; border: 1px solid #34d39940; color: var(--green); }
+        .notif.error { background: #2a0f0f; border: 1px solid #f8717140; color: var(--red); }
+        .notif-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
       `}</style>
     </div>
   )
