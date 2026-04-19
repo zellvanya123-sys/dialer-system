@@ -18,72 +18,86 @@ const __dirname = path.dirname(__filename);
 export interface AIVoiceConfig {
   systemPrompt: string;
   welcomeMessage: string;
-  maxTurns: number;        // макс количество реплик
-  timeoutMs: number;       // таймаут всего разговора
-  turnTimeoutMs: number;   // таймаут одной реплики
-  maxHistoryTurns: number; // сколько реплик держать в контексте GPT
+  maxTurns: number;
+  timeoutMs: number;
+  turnTimeoutMs: number;
+  maxHistoryTurns: number;
 }
 
 export interface CallSession {
   id: string;
   contactId: string;
+  contactName: string;   // ✅ FIX #63: персонализация — имя клиента
   phone: string;
   startTime: string;
   turns: ConversationTurn[];
   status: 'initiated' | 'in_progress' | 'completed' | 'failed';
   transcript: string;
-  callTimeoutTimer?: NodeJS.Timeout; // ✅ таймер для принудительного завершения
+  isSpeaking: boolean;   // ✅ FIX #61: флаг — AI сейчас говорит
+  negativeCount: number; // ✅ FIX #60: счётчик негатива
+  callTimeoutTimer?: NodeJS.Timeout;
 }
 
 export interface ConversationTurn {
   role: 'ai' | 'user';
   content: string;
   timestamp: string;
-  audioFile?: string;
+  sentiment?: string;    // ✅ FIX #60: эмоция клиента
 }
 
-// ✅ Filler-фразы — бот говорит пока GPT думает
+// Filler-фразы — бот говорит пока GPT думает
 const FILLER_PHRASES = [
   'Хм, понял...',
   'Секунду...',
   'Хорошо...',
-  'Позвольте уточнить...',
+  'Дайте подумаю...',
+  'Понял вас...',
 ];
 
-// ✅ Fallback-фразы — если клиент молчит или STT не распознал
+// Fallback — клиент молчит или STT не распознал
 const FALLBACK_PHRASES = [
   'Не расслышал вас, повторите пожалуйста.',
   'Простите, можете повторить?',
   'Кажется связь прервалась, вы меня слышите?',
 ];
 
-// ✅ Быстрые ответы без GPT — для частых слов
-const QUICK_RESPONSES: Record<string, string> = {
-  'да': 'Отлично! Тогда давайте я расскажу подробнее.',
-  'нет': 'Понял вас. Может быть, у вас есть вопросы?',
-  'не интересует': 'Хорошо, не буду вас беспокоить. Спасибо за уделённое время!',
-  'не интересно': 'Понял, спасибо за честность. Хорошего дня!',
-  'занят': 'Хорошо, перезвоним вам позже. Удобно в другое время?',
-  'перезвоните': 'Конечно! Когда вам удобно, чтобы я перезвонил?',
+// ✅ FIX #60: Фразы при обнаружении негатива/злости
+const ANGRY_RESPONSES = [
+  'Понимаю вас, простите что побеспокоил. Больше не буду звонить!',
+  'Извините за беспокойство. Хорошего дня!',
+  'Прошу прощения за неудобство. Удачного дня!',
+];
+
+// Быстрые ответы без GPT
+const QUICK_RESPONSES: Record<string, { reply: string; shouldEnd?: boolean }> = {
+  'да': { reply: 'Отлично! Тогда давайте расскажу подробнее.' },
+  'нет': { reply: 'Понял вас. Может быть, есть вопросы?' },
+  'не интересует': { reply: 'Хорошо, не буду беспокоить. Спасибо за время!', shouldEnd: true },
+  'не интересно': { reply: 'Понял, спасибо за честность. Хорошего дня!', shouldEnd: true },
+  'занят': { reply: 'Хорошо, перезвоним позже. В какое время удобнее?' },
+  'перезвоните': { reply: 'Конечно! Когда вам удобно перезвонить?' },
+  'не звоните': { reply: 'Извините за беспокойство, больше не буду звонить!', shouldEnd: true },
+  'стоп': { reply: 'Хорошо, извините. Хорошего дня!', shouldEnd: true },
 };
 
 const defaultConfig: AIVoiceConfig = {
-  systemPrompt: `Ты вежливый менеджер по продажам. Ты звонишь клиенту с предложением услуги. 
+  systemPrompt: `Ты вежливый менеджер по продажам. Ты звонишь клиенту с предложением.
 Правила:
-- Отвечай кратко — максимум 2-3 предложения
-- Не упоминай что ты AI
-- Будь дружелюбным и естественным
-- Если клиент отказывает — поблагодари и попрощайся`,
-  welcomeMessage: 'Здравствуйте! Это компания XYZ. У нас для вас есть интересное предложение. У вас есть минута?',
+- Отвечай кратко — МАКСИМУМ 2 предложения
+- Обращайся к клиенту по имени если знаешь
+- Не говори что ты AI или робот
+- Будь естественным и дружелюбным
+- Если клиент раздражён — сразу вежливо прощайся
+- Если клиент задаёт вопрос — отвечай конкретно`,
+  welcomeMessage: 'Здравствуйте! Это компания XYZ, у нас для вас есть предложение. Есть минутка?',
   maxTurns: 10,
-  timeoutMs: 3 * 60 * 1000,    // 3 минуты максимум на весь разговор
-  turnTimeoutMs: 10 * 1000,     // 10 секунд на одну реплику
-  maxHistoryTurns: 6,           // держим только последние 6 реплик в контексте
+  timeoutMs: 3 * 60 * 1000,
+  turnTimeoutMs: 10 * 1000,
+  maxHistoryTurns: 6,
 };
 
 class AIVoiceService {
   private config: AIVoiceConfig;
-  // ✅ Сессии хранятся в Map, но с лимитом и очисткой
   private sessions: Map<string, CallSession> = new Map();
   private audioDir: string;
 
@@ -95,13 +109,15 @@ class AIVoiceService {
       fs.mkdirSync(this.audioDir, { recursive: true });
     }
 
-    // ✅ Очищаем старые сессии каждые 10 минут
+    // Очистка сессий каждые 10 минут
     setInterval(() => this.cleanupOldSessions(), 10 * 60 * 1000);
+
+    // ✅ FIX #14: Очистка старых аудиофайлов раз в час
+    setInterval(() => this.cleanupOldAudioFiles(), 60 * 60 * 1000);
 
     logger.info('AI Voice Service initialized');
   }
 
-  // ✅ Очистка завершённых сессий из памяти
   private cleanupOldSessions(): void {
     const now = Date.now();
     let cleaned = 0;
@@ -116,74 +132,103 @@ class AIVoiceService {
     if (cleaned > 0) logger.info(`Cleaned up ${cleaned} old sessions`);
   }
 
+  // ✅ FIX #14: Чистим аудиофайлы старше 2 часов
+  private cleanupOldAudioFiles(): void {
+    try {
+      const files = fs.readdirSync(this.audioDir);
+      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+      let deleted = 0;
+      for (const file of files) {
+        const filePath = path.join(this.audioDir, file);
+        const stat = fs.statSync(filePath);
+        if (stat.mtimeMs < twoHoursAgo) {
+          fs.unlinkSync(filePath);
+          deleted++;
+        }
+      }
+      if (deleted > 0) logger.info(`Cleaned up ${deleted} old audio files`);
+    } catch (err: any) {
+      logger.warn(`Audio cleanup error: ${err.message}`);
+    }
+  }
+
   async startCall(contactId: string): Promise<string> {
     const contact = ContactRepository.findById(contactId);
-    if (!contact) {
-      throw new Error(`Contact not found: ${contactId}`);
-    }
+    if (!contact) throw new Error(`Contact not found: ${contactId}`);
 
     const sessionId = uuidv4();
+
+    // ✅ FIX #63: Персонализированное приветствие по имени
+    const firstName = contact.name?.split(' ')[0] || '';
+    const personalWelcome = firstName && firstName !== 'Без имени'
+      ? this.config.welcomeMessage.replace('Здравствуйте!', `Здравствуйте, ${firstName}!`)
+      : this.config.welcomeMessage;
+
     const session: CallSession = {
       id: sessionId,
       contactId,
+      contactName: firstName,
       phone: contact.phone,
       startTime: new Date().toISOString(),
       turns: [],
       status: 'initiated',
       transcript: '',
+      isSpeaking: false,
+      negativeCount: 0,
     };
 
     this.sessions.set(sessionId, session);
-    logger.info(`AI Voice call started: ${sessionId} to ${contact.phone}`);
 
     const dialer = getDialer();
     await dialer.makeCall(contact.id);
 
     session.status = 'in_progress';
 
-    // ✅ Таймаут всего разговора — принудительно завершаем через 3 минуты
+    // Таймаут всего разговора
     session.callTimeoutTimer = setTimeout(async () => {
       if (session.status === 'in_progress') {
-        logger.warn(`Session ${sessionId} timed out after ${this.config.timeoutMs / 1000}s`);
+        logger.warn(`Session ${sessionId} timed out`);
         await this.endCall(sessionId, CallResult.HANGUP);
       }
     }, this.config.timeoutMs);
 
-    // Даём 3 секунды на соединение, потом произносим приветствие
+    // Приветствие через 3 сек
     setTimeout(() => {
-      this.sendWelcome(sessionId, contact).catch(err => {
-        logger.error(`AI welcome error: ${err.message}`);
-      });
+      this.speakAndRecord(sessionId, personalWelcome).catch(err =>
+        logger.error(`Welcome error: ${err.message}`)
+      );
     }, 3000);
 
+    logger.info(`AI Voice session ${sessionId} → ${contact.name} (${contact.phone})`);
     return sessionId;
   }
 
-  // ✅ Отправляем приветственное сообщение
-  private async sendWelcome(sessionId: string, contact: Contact): Promise<void> {
+  // ✅ FIX #61: Говорим и записываем реплику
+  private async speakAndRecord(sessionId: string, text: string, sentiment?: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session || session.status !== 'in_progress') return;
 
-    const welcome = this.config.welcomeMessage;
+    session.isSpeaking = true;
+    session.turns.push({ role: 'ai', content: text, timestamp: new Date().toISOString(), sentiment });
+    session.transcript += `AI: ${text}\n`;
 
-    session.turns.push({
-      role: 'ai',
-      content: welcome,
-      timestamp: new Date().toISOString(),
-    });
-    session.transcript += `AI: ${welcome}\n`;
-
-    await this.synthesizeAndSend(sessionId, welcome);
+    await this.synthesizeAndSend(sessionId, text);
+    session.isSpeaking = false;
   }
 
-  // ✅ Обрабатываем ответ клиента (вызывается из webhook когда получаем аудио)
   async handleUserSpeech(sessionId: string, audioBuffer: Buffer): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session || session.status !== 'in_progress') return;
 
-    // ✅ Проверяем лимит реплик
+    // ✅ FIX #61: Если AI сейчас говорит — клиент перебивает, останавливаемся
+    if (session.isSpeaking) {
+      logger.info(`Session ${sessionId}: interruption detected — stopping AI speech`);
+      session.isSpeaking = false;
+      // Небольшая пауза перед ответом
+      await new Promise(r => setTimeout(r, 300));
+    }
+
     if (session.turns.length >= this.config.maxTurns * 2) {
-      logger.info(`Session ${sessionId} reached maxTurns`);
       await this.endCall(sessionId, CallResult.ANSWERED);
       return;
     }
@@ -197,122 +242,116 @@ class AIVoiceService {
       logger.error(`STT error: ${err.message}`);
     }
 
-    // ✅ Fallback если клиент молчит или STT не распознал
     if (!userText || userText.trim().length < 2) {
       const fallback = FALLBACK_PHRASES[Math.floor(Math.random() * FALLBACK_PHRASES.length)];
-      logger.info(`Session ${sessionId}: STT empty, using fallback`);
-      await this.synthesizeAndSend(sessionId, fallback);
+      await this.speakAndRecord(sessionId, fallback);
       return;
     }
 
-    logger.info(`Session ${sessionId} user said: ${userText}`);
+    logger.info(`Session ${sessionId}: user said: "${userText}"`);
 
-    session.turns.push({
-      role: 'user',
-      content: userText,
-      timestamp: new Date().toISOString(),
-    });
+    // ✅ FIX #60: Анализируем эмоции параллельно с подготовкой ответа
+    const openai = getOpenAI();
+    const sentimentPromise = openai.analyzeSentiment(userText);
+
+    session.turns.push({ role: 'user', content: userText, timestamp: new Date().toISOString() });
     session.transcript += `Клиент: ${userText}\n`;
 
-    // ✅ Быстрый ответ без GPT для частых слов
-    const quickKey = userText.toLowerCase().trim();
-    if (QUICK_RESPONSES[quickKey]) {
-      const quickResponse = QUICK_RESPONSES[quickKey];
-      logger.info(`Session ${sessionId}: quick response used`);
-      session.turns.push({
-        role: 'ai',
-        content: quickResponse,
-        timestamp: new Date().toISOString(),
-      });
-      session.transcript += `AI: ${quickResponse}\n`;
-      await this.synthesizeAndSend(sessionId, quickResponse);
+    // ✅ FIX #63: Быстрый intent без GPT
+    const intent = await openai.classifyIntent(userText);
 
-      // Если отказ — завершаем звонок
-      if (['не интересует', 'не интересно'].includes(quickKey)) {
-        setTimeout(() => this.endCall(sessionId, CallResult.ANSWERED), 3000);
+    // Быстрые ответы
+    const quickKey = userText.toLowerCase().trim();
+    const quickMatch = QUICK_RESPONSES[quickKey] ||
+      (intent === 'refuse' ? QUICK_RESPONSES['не интересует'] : null) ||
+      (intent === 'agree' ? QUICK_RESPONSES['да'] : null);
+
+    if (quickMatch) {
+      await this.speakAndRecord(sessionId, quickMatch.reply);
+      if (quickMatch.shouldEnd) {
+        setTimeout(() => this.endCall(sessionId, CallResult.ANSWERED), 2000);
       }
       return;
     }
 
-    // ✅ Filler-фраза пока GPT думает
+    // ✅ FIX #60: Проверяем результат sentiment analysis
+    const sentiment = await sentimentPromise;
+    logger.info(`Session ${sessionId}: sentiment = ${sentiment.emotion} (shouldEnd=${sentiment.shouldEnd})`);
+
+    if (sentiment.shouldEnd || sentiment.emotion === 'angry') {
+      session.negativeCount++;
+      if (session.negativeCount >= 1 || sentiment.emotion === 'angry') {
+        const angryReply = ANGRY_RESPONSES[Math.floor(Math.random() * ANGRY_RESPONSES.length)];
+        await this.speakAndRecord(sessionId, angryReply, sentiment.emotion);
+        setTimeout(() => this.endCall(sessionId, CallResult.ANSWERED), 2000);
+        return;
+      }
+    }
+
+    // ✅ Filler пока GPT думает
     const filler = FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
     this.synthesizeAndSend(sessionId, filler).catch(() => {});
 
-    // ✅ Ограничиваем историю — только последние N реплик
+    // ✅ FIX #63: Персонализированный промпт с именем клиента
     const recentTurns = session.turns.slice(-this.config.maxHistoryTurns);
+    const personalPrompt = session.contactName
+      ? `${this.config.systemPrompt}\n\nИмя клиента: ${session.contactName}. Обращайся по имени 1-2 раза за разговор.`
+      : this.config.systemPrompt;
+
+    // ✅ FIX #49: Используем дешёвую модель для простых вопросов
+    const useCheapModel = sentiment.emotion === 'neutral' && intent !== 'question';
 
     const messages: any[] = [
-      { role: 'system', content: this.config.systemPrompt },
+      { role: 'system', content: personalPrompt },
       ...recentTurns.map(t => ({
         role: t.role === 'ai' ? 'assistant' : 'user',
         content: t.content,
       })),
     ];
 
-    // ✅ Таймаут на ответ GPT
-    const openai = getOpenAI();
     let aiResponse = '';
-
     try {
-      const responsePromise = openai.chat(messages);
+      const responsePromise = openai.chat(messages, useCheapModel);
       const timeoutPromise = new Promise<string>((_, reject) =>
         setTimeout(() => reject(new Error('GPT timeout')), this.config.turnTimeoutMs)
       );
-
       aiResponse = await Promise.race([responsePromise, timeoutPromise]);
     } catch (err: any) {
       logger.error(`GPT error: ${err.message}`);
       aiResponse = 'Простите, не расслышал. Можете повторить?';
     }
 
-    session.turns.push({
-      role: 'ai',
-      content: aiResponse,
-      timestamp: new Date().toISOString(),
-    });
-    session.transcript += `AI: ${aiResponse}\n`;
-
-    await this.synthesizeAndSend(sessionId, aiResponse);
+    await this.speakAndRecord(sessionId, aiResponse, sentiment.emotion);
   }
 
-  // ✅ TTS — синтез и отправка аудио
   private async synthesizeAndSend(sessionId: string, text: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-
     try {
       const tts = getYandexTTS();
       const audioFile = path.join(this.audioDir, `${sessionId}_${Date.now()}.mp3`);
       await tts.synthesizeToFile({ text }, audioFile);
-      logger.info(`TTS synthesized: ${audioFile}`);
+      logger.info(`TTS: "${text.substring(0, 40)}..."`);
     } catch (err: any) {
       logger.error(`TTS error: ${err.message}`);
     }
   }
 
-  // ✅ Завершаем звонок и чистим ресурсы
   async endCall(sessionId: string, result: CallResult): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
     session.status = 'completed';
+    if (session.callTimeoutTimer) clearTimeout(session.callTimeoutTimer);
 
-    // Останавливаем таймер
-    if (session.callTimeoutTimer) {
-      clearTimeout(session.callTimeoutTimer);
-    }
-
-    // Уменьшаем счётчик активных звонков
     onCallCompleted();
 
-    // Сохраняем лог звонка в БД
     try {
       await createCallLog(session.contactId, result);
     } catch (err: any) {
       logger.error(`Error saving call log: ${err.message}`);
     }
 
-    // Обновляем контакт
     const contact = ContactRepository.findById(session.contactId);
     if (contact) {
       ContactRepository.update(session.contactId, {
@@ -321,34 +360,21 @@ class AIVoiceService {
       });
     }
 
-    // Удаляем аудио файлы сессии (освобождаем место)
+    // Чистим аудио этой сессии
     try {
       const files = fs.readdirSync(this.audioDir);
-      files
-        .filter(f => f.startsWith(sessionId))
+      files.filter(f => f.startsWith(sessionId))
         .forEach(f => fs.unlinkSync(path.join(this.audioDir, f)));
-    } catch (err) {}
+    } catch {}
 
-    logger.info(`Call completed: ${sessionId} | result: ${result} | turns: ${session.turns.length}`);
+    logger.info(`Session ${sessionId} ended | result: ${result} | turns: ${session.turns.length}`);
     logger.info(`Transcript:\n${session.transcript}`);
   }
 
-  getSession(sessionId: string): CallSession | undefined {
-    return this.sessions.get(sessionId);
-  }
-
-  getAllSessions(): CallSession[] {
-    return Array.from(this.sessions.values());
-  }
-
-  getActiveSessions(): CallSession[] {
-    return Array.from(this.sessions.values()).filter(s => s.status === 'in_progress');
-  }
-
-  updateConfig(newConfig: Partial<AIVoiceConfig>): void {
-    this.config = { ...this.config, ...newConfig };
-    logger.info(`AI Voice config updated`);
-  }
+  getSession(id: string) { return this.sessions.get(id); }
+  getAllSessions() { return Array.from(this.sessions.values()); }
+  getActiveSessions() { return Array.from(this.sessions.values()).filter(s => s.status === 'in_progress'); }
+  updateConfig(c: Partial<AIVoiceConfig>) { this.config = { ...this.config, ...c }; }
 }
 
 let aiVoiceService: AIVoiceService;
@@ -359,9 +385,7 @@ export function initAIVoice(config?: Partial<AIVoiceConfig>): AIVoiceService {
 }
 
 export function getAIVoice(): AIVoiceService {
-  if (!aiVoiceService) {
-    throw new Error('AI Voice not initialized. Call initAIVoice() first.');
-  }
+  if (!aiVoiceService) throw new Error('AI Voice not initialized');
   return aiVoiceService;
 }
 
