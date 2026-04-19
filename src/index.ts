@@ -14,6 +14,7 @@ import { contactsRouter } from './api/routes/contacts.routes';
 import { callsRouter } from './api/routes/calls.routes';
 import { webhooksRouter } from './api/routes/webhooks.routes';
 import { uploadRouter } from './api/routes/upload.routes';
+import { basicAuth } from './api/middleware/basicAuth';
 import logger from './utils/logger';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,19 +25,21 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Раздаём собранный React из frontend/dist/
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
-
+// ✅ API маршруты (без basicAuth — у них свой API-ключ)
 app.use('/api/contacts', contactsRouter);
 app.use('/api/calls', callsRouter);
-app.use('/api/webhooks', webhooksRouter);
+app.use('/api/webhooks', webhooksRouter); // Sipuni шлёт сюда — не трогаем
 app.use('/api/upload', uploadRouter);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ✅ Все остальные запросы отдаём index.html (для React Router)
+// ✅ Фронтенд — только с авторизацией
+app.use(basicAuth);
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// ✅ Все остальные запросы → index.html (React Router)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
