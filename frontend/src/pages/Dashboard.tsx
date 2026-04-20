@@ -11,13 +11,12 @@ interface Contact {
   id: string; name: string; phone: string; status: string
   attemptCount: number; lastCallAt?: string; lastCallResult?: string
 }
-// ✅ FIX #3: Интерфейс истории звонков
 interface CallLog {
   id: string; contactId: string
   contactName: string; contactPhone: string
   startedAt: string; duration?: number; result: string
 }
-type Tab = 'overview' | 'contacts' | 'logs'
+type Tab = 'overview' | 'contacts' | 'logs' | 'economics'
 
 const STATUS_LABELS: Record<string, string> = {
   new: 'Новый', call1: 'Звонок 1', call2: 'Звонок 2', call3: 'Звонок 3',
@@ -104,11 +103,206 @@ function Notification({ text, type }: { text: string; type: 'success' | 'error' 
   )
 }
 
+// ═══ КАЛЬКУЛЯТОР ЭКОНОМИКИ ═══
+function EconomicsTab() {
+  const [totalCalls, setTotalCalls] = useState(1000)
+  const [conv, setConv] = useState(10)
+  const [qual, setQual] = useState(25)
+  const [dur, setDur] = useState(3)
+  const [leadVal, setLeadVal] = useState(50000)
+
+  const SIPUNI = 2.15
+  const USD_RUB = 90
+
+  const answered = Math.round(totalCalls * conv / 100)
+  const notAnswered = totalCalls - answered
+  const leads = Math.round(answered * qual / 100)
+
+  const sipAnswered = answered * dur * SIPUNI
+  const sipRing = notAnswered * 0.35 * SIPUNI
+  const sipTotal = sipAnswered + sipRing
+
+  const tokIn = 4000; const tokOut = 1200; const cheap = 0.7
+  const openaiTotal = answered * (
+    cheap * (tokIn * 0.00000015 * USD_RUB + tokOut * 0.0000006 * USD_RUB) +
+    (1 - cheap) * (tokIn * 0.000005 * USD_RUB + tokOut * 0.000015 * USD_RUB)
+  )
+
+  const ttsTotal = answered * 10 * 90 * (240 / 1_000_000)
+  const sttTotal = answered * 10 * 8 / 60 * 2.0
+  const serverTotal = 300
+
+  const total = sipTotal + openaiTotal + ttsTotal + sttTotal + serverTotal
+  const perCall = total / totalCalls
+  const perLead = leads > 0 ? total / leads : 0
+  const revenue = leads * leadVal
+  const profit = revenue - total
+  const roi = total > 0 ? Math.round(profit / total * 100) : 0
+
+  const fmtR = (n: number) => Math.round(n).toLocaleString('ru') + ' ₽'
+
+  const bars = [
+    { name: 'Sipuni (телефония)', val: sipTotal, color: '#378ADD' },
+    { name: 'Yandex STT', val: sttTotal, color: '#1D9E75' },
+    { name: 'OpenAI GPT', val: openaiTotal, color: '#7F77DD' },
+    { name: 'Yandex TTS', val: ttsTotal, color: '#EF9F27' },
+    { name: 'Сервер', val: serverTotal, color: '#64748b' },
+  ]
+  const barMax = Math.max(...bars.map(b => b.val))
+
+  return (
+    <div className="page">
+      {/* Переключатель объёма */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+        {[1000, 5000, 10000, 50000].map(n => (
+          <button key={n} onClick={() => setTotalCalls(n)}
+            style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer', fontSize: 13, fontFamily: 'var(--font)', fontWeight: totalCalls === n ? 600 : 400, background: totalCalls === n ? 'var(--bg3)' : 'var(--bg2)', color: totalCalls === n ? 'var(--text)' : 'var(--text3)', transition: 'all .15s' }}>
+            {n.toLocaleString('ru')}
+          </button>
+        ))}
+        <span style={{ fontSize: 12, color: 'var(--text3)', alignSelf: 'center', marginLeft: 4 }}>звонков</span>
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 16 }}>Sipuni: базовый тариф 2.15 ₽/мин · Недозвон ~21 сек · OpenAI 70% mini / 30% gpt-4o</div>
+
+      {/* Ползунки */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+        {[
+          { label: 'Конверсия дозвона', val: conv, set: setConv, min: 3, max: 40, step: 1, fmt: (v: number) => v + '%' },
+          { label: 'Квалификация из дозвонов', val: qual, set: setQual, min: 5, max: 60, step: 1, fmt: (v: number) => v + '%' },
+          { label: 'Ср. длина разговора', val: dur, set: setDur, min: 1, max: 10, step: 0.5, fmt: (v: number) => v + ' мин' },
+          { label: 'Ценность 1 лида', val: leadVal, set: setLeadVal, min: 10000, max: 300000, step: 5000, fmt: (v: number) => (v / 1000).toFixed(0) + 'к ₽' },
+        ].map(ctrl => (
+          <div key={ctrl.label} style={{ background: 'var(--bg3)', borderRadius: 10, padding: '12px 16px' }}>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 8 }}>{ctrl.label}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input type="range" min={ctrl.min} max={ctrl.max} step={ctrl.step} value={ctrl.val}
+                onChange={e => ctrl.set(+e.target.value)} style={{ flex: 1 }} />
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', minWidth: 56, textAlign: 'right', fontFamily: 'var(--mono)' }}>{ctrl.fmt(ctrl.val)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Метрики */}
+      <div className="stats-grid" style={{ marginBottom: 16 }}>
+        <div className="stat-card" style={{ '--accent': '#818cf8' } as any}>
+          <div className="stat-icon">◈</div>
+          <div className="stat-value">{fmtR(total)}</div>
+          <div className="stat-label">Итого расход</div>
+          <div className="stat-sub">{totalCalls.toLocaleString('ru')} звонков</div>
+          <div className="stat-glow" />
+        </div>
+        <div className="stat-card" style={{ '--accent': '#38bdf8' } as any}>
+          <div className="stat-icon">◎</div>
+          <div className="stat-value">{perCall.toFixed(2)} ₽</div>
+          <div className="stat-label">За 1 звонок</div>
+          <div className="stat-sub">включая недозвоны</div>
+          <div className="stat-glow" />
+        </div>
+        <div className="stat-card" style={{ '--accent': '#34d399' } as any}>
+          <div className="stat-icon">◆</div>
+          <div className="stat-value">{fmtR(perLead)}</div>
+          <div className="stat-label">Стоимость лида</div>
+          <div className="stat-sub">{leads} квал. лидов</div>
+          <div className="stat-glow" />
+        </div>
+        <div className="stat-card" style={{ '--accent': '#fb923c' } as any}>
+          <div className="stat-icon">◷</div>
+          <div className="stat-value">{answered}</div>
+          <div className="stat-label">Дозвонились</div>
+          <div className="stat-sub">из {totalCalls.toLocaleString('ru')}</div>
+          <div className="stat-glow" />
+        </div>
+      </div>
+
+      {/* Расходы + ROI */}
+      <div className="overview-grid" style={{ marginBottom: 16 }}>
+        <div className="card">
+          <div className="card-header"><h2 className="card-title">Расходы</h2></div>
+          <div style={{ padding: '12px 20px 18px' }}>
+            {[
+              { name: `Sipuni 2.15 ₽/мин`, val: sipTotal, sub: `дозвоны ${Math.round(sipAnswered)} ₽ · недозвоны ${Math.round(sipRing)} ₽` },
+              { name: 'OpenAI GPT', val: openaiTotal, sub: '70% mini + 30% gpt-4o' },
+              { name: 'Yandex STT', val: sttTotal, sub: '2 ₽/мин распознавания' },
+              { name: 'Yandex TTS', val: ttsTotal, sub: '240 ₽/млн символов' },
+              { name: 'Сервер', val: serverTotal, sub: 'фиксированно в месяц' },
+            ].map((row, i) => (
+              <div key={i} style={{ borderBottom: i < 4 ? '1px solid var(--border)' : 'none', padding: '10px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <span style={{ fontSize: 13, color: 'var(--text2)' }}>{row.name}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--mono)' }}>{fmtR(row.val)}</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text3)' }}>{row.sub}</div>
+              </div>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--border2)' }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>Итого</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)', fontFamily: 'var(--mono)' }}>{fmtR(total)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="card">
+            <div className="card-header"><h2 className="card-title">ROI</h2></div>
+            <div style={{ padding: '12px 20px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { label: 'Лидов квалифицировано', val: String(leads), color: 'var(--text)' },
+                { label: `Доход (${(leadVal / 1000).toFixed(0)}к ₽/лид)`, val: '+' + fmtR(revenue), color: 'var(--green)' },
+                { label: 'Расход', val: '-' + fmtR(total), color: 'var(--red)' },
+              ].map(row => (
+                <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text2)' }}>{row.label}</span>
+                  <span style={{ fontWeight: 600, color: row.color, fontFamily: 'var(--mono)' }}>{row.val}</span>
+                </div>
+              ))}
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 600, color: 'var(--text2)', fontSize: 14 }}>Прибыль</span>
+                <span style={{ fontWeight: 700, fontSize: 16, color: profit >= 0 ? 'var(--green)' : 'var(--red)', fontFamily: 'var(--mono)' }}>
+                  {profit >= 0 ? '+' : ''}{fmtR(profit)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--text2)' }}>ROI</span>
+                <span style={{ fontWeight: 700, color: roi >= 0 ? 'var(--green)' : 'var(--red)' }}>{roi}%</span>
+              </div>
+              <div style={{ background: roi >= 0 ? '#34d39915' : '#f8717115', border: `1px solid ${roi >= 0 ? '#34d39930' : '#f8717130'}`, borderRadius: 8, padding: '9px 12px', fontSize: 12, color: roi >= 0 ? 'var(--green)' : 'var(--red)', marginTop: 4 }}>
+                {roi >= 0
+                  ? `Лид стоит ${fmtR(perLead)} — в ${Math.round(leadVal / Math.max(perLead, 1))}x дешевле его ценности`
+                  : 'Убыточно — увеличь конверсию или ценность лида'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Бары */}
+      <div className="card">
+        <div className="card-header"><h2 className="card-title">Структура расходов</h2></div>
+        <div style={{ padding: '12px 20px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {bars.map(b => (
+            <div key={b.name}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text2)', marginBottom: 5 }}>
+                <span>{b.name}</span>
+                <span style={{ fontFamily: 'var(--mono)' }}>{fmtR(b.val)} ({Math.round(b.val / total * 100)}%)</span>
+              </div>
+              <div style={{ height: 8, background: 'var(--bg4)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${Math.round(b.val / barMax * 100)}%`, background: b.color, borderRadius: 4, transition: 'width .4s' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function Dashboard() {
   const [tab, setTab] = useState<Tab>('overview')
   const [stats, setStats] = useState<Stats | null>(null)
   const [contacts, setContacts] = useState<Contact[]>([])
-  const [logs, setLogs] = useState<CallLog[]>([])          // ✅ FIX #3
+  const [logs, setLogs] = useState<CallLog[]>([])
   const [loading, setLoading] = useState(true)
   const [apiError, setApiError] = useState(false)
   const [toggleLoading, setToggleLoading] = useState(false)
@@ -146,7 +340,6 @@ export function Dashboard() {
     try { const res = await fetch('/api/contacts'); if (res.ok) setContacts(await res.json()) } catch { }
   }, [])
 
-  // ✅ FIX #3: Загружаем историю звонков
   const fetchLogs = useCallback(async () => {
     try { const res = await fetch('/api/calls/logs'); if (res.ok) setLogs(await res.json()) } catch { }
   }, [])
@@ -281,7 +474,12 @@ export function Dashboard() {
           </div>
         </div>
         <nav className="nav">
-          {([['overview', 'Обзор'], ['contacts', 'Контакты'], ['logs', `История ${logs.length > 0 ? `(${logs.length})` : ''}`]] as const).map(([key, label]) => (
+          {([
+            ['overview', 'Обзор'],
+            ['contacts', 'Контакты'],
+            ['logs', logs.length > 0 ? `История (${logs.length})` : 'История'],
+            ['economics', 'Экономика'],
+          ] as const).map(([key, label]) => (
             <button key={key} className={`nav-btn ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>
               {label}
               {tab === key && <span className="nav-indicator" />}
@@ -313,7 +511,6 @@ export function Dashboard() {
                   <FunnelBar value={s.noAnswer} max={s.total || 1} color="#475569" label="Нет ответа" count={s.noAnswer} />
                 </div>
               </div>
-
               <div className="right-col">
                 <div className="card">
                   <div className="card-header"><h2 className="card-title">Статусы</h2></div>
@@ -360,6 +557,7 @@ export function Dashboard() {
                 </button>
                 <button className="action-btn secondary" onClick={() => setTab('contacts')}>Управление контактами</button>
                 <button className="action-btn secondary" onClick={() => setTab('logs')}>История звонков</button>
+                <button className="action-btn secondary" onClick={() => setTab('economics')}>Калькулятор экономики</button>
                 <button className="action-btn ghost" onClick={() => { fetchStats(); fetchContacts(); fetchLogs(); notify('Данные обновлены') }}>↻ Обновить</button>
               </div>
             </div>
@@ -451,13 +649,10 @@ export function Dashboard() {
                     </div>
                   ))}
                 </div>
-
                 <div className="card table-card">
                   <div className="table-wrap">
                     <table className="table">
-                      <thead>
-                        <tr>{['Имя', 'Телефон', 'Статус', 'Попыток', 'Последний звонок', 'Результат', ''].map(h => <th key={h}>{h}</th>)}</tr>
-                      </thead>
+                      <thead><tr>{['Имя', 'Телефон', 'Статус', 'Попыток', 'Последний звонок', 'Результат', ''].map(h => <th key={h}>{h}</th>)}</tr></thead>
                       <tbody>
                         {filtered.slice(0, 100).map(c => (
                           <tr key={c.id}>
@@ -467,12 +662,10 @@ export function Dashboard() {
                             <td className="td-center">{c.attemptCount}</td>
                             <td className="td-muted">{fmtDate(c.lastCallAt)}</td>
                             <td>{c.lastCallResult && <ResultBadge result={c.lastCallResult} />}</td>
-                            <td>
-                              <div className="td-actions">
-                                <button className="icon-btn call" onClick={() => initiateCall(c.id, c.name)} disabled={callLoading === c.id}>{callLoading === c.id ? '…' : '↗'}</button>
-                                <button className="icon-btn del" onClick={() => deleteContact(c.id, c.name)}>✕</button>
-                              </div>
-                            </td>
+                            <td><div className="td-actions">
+                              <button className="icon-btn call" onClick={() => initiateCall(c.id, c.name)} disabled={callLoading === c.id}>{callLoading === c.id ? '…' : '↗'}</button>
+                              <button className="icon-btn del" onClick={() => deleteContact(c.id, c.name)}>✕</button>
+                            </div></td>
                           </tr>
                         ))}
                       </tbody>
@@ -485,23 +678,20 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* ═══ FIX #3: ИСТОРИЯ ЗВОНКОВ — РЕАЛЬНЫЕ ДАННЫЕ ═══ */}
+        {/* ═══ ИСТОРИЯ ═══ */}
         {tab === 'logs' && (
           <div className="page">
-            {/* Мини-статистика по истории */}
             <div className="stats-grid">
               <StatCard label="Всего звонков" value={fmt(logs.length)} sub="в базе" accent="#818cf8" icon="◈" />
               <StatCard label="Отвечено" value={fmt(logs.filter(l => l.result === 'answered').length)} sub={`${logs.length > 0 ? Math.round(logs.filter(l => l.result === 'answered').length / logs.length * 100) : 0}%`} accent="#34d399" icon="✓" />
               <StatCard label="Нет ответа" value={fmt(logs.filter(l => l.result === 'no_answer').length)} sub="" accent="#f87171" icon="✗" />
               <StatCard label="Автоответчик" value={fmt(logs.filter(l => l.result === 'answering_machine').length)} sub="" accent="#818cf8" icon="⊙" />
             </div>
-
             <div className="card">
               <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                 <h2 className="card-title">История звонков</h2>
-                <input className="field search-field" style={{ maxWidth: 240 }} value={logSearch} onChange={e => setLogSearch(e.target.value)} placeholder="Поиск по имени или номеру..." />
+                <input className="field search-field" style={{ maxWidth: 240 }} value={logSearch} onChange={e => setLogSearch(e.target.value)} placeholder="Поиск..." />
               </div>
-
               {filteredLogs.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">◈</div>
@@ -509,7 +699,6 @@ export function Dashboard() {
                 </div>
               ) : (
                 <>
-                  {/* Мобиль: карточки */}
                   <div className="contact-cards" style={{ padding: '12px 0' }}>
                     {filteredLogs.slice(0, 50).map(log => (
                       <div key={log.id} className="contact-card">
@@ -518,23 +707,17 @@ export function Dashboard() {
                           <div className="contact-phone">{log.contactPhone}</div>
                           <div className="contact-meta">
                             <ResultBadge result={log.result} />
-                            {log.duration !== undefined && log.duration > 0 && (
-                              <span className="attempt-count">⏱ {fmtDur(log.duration)}</span>
-                            )}
+                            {log.duration !== undefined && log.duration > 0 && <span className="attempt-count">⏱ {fmtDur(log.duration)}</span>}
                             <span className="attempt-count">{fmtDate(log.startedAt)}</span>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-
-                  {/* Десктоп: таблица */}
-                  <div className="table-card" style={{ display: 'none' }}>
+                  <div className="card table-card" style={{ border: 'none', borderRadius: 0 }}>
                     <div className="table-wrap">
                       <table className="table">
-                        <thead>
-                          <tr>{['Имя', 'Телефон', 'Результат', 'Длительность', 'Дата и время'].map(h => <th key={h}>{h}</th>)}</tr>
-                        </thead>
+                        <thead><tr>{['Имя', 'Телефон', 'Результат', 'Длительность', 'Дата и время'].map(h => <th key={h}>{h}</th>)}</tr></thead>
                         <tbody>
                           {filteredLogs.slice(0, 200).map(log => (
                             <tr key={log.id}>
@@ -555,6 +738,10 @@ export function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* ═══ ЭКОНОМИКА ═══ */}
+        {tab === 'economics' && <EconomicsTab />}
+
       </main>
 
       <style>{`
@@ -570,13 +757,13 @@ export function Dashboard() {
           --r: 12px; --r2: 8px;
         }
         body { background: var(--bg); color: var(--text); font-family: var(--font); }
-        .splash { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+        .splash { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
         .splash-inner { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px; }
         .splash-logo { animation: spin 3s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .splash-text { color: var(--text2); font-size: 14px; letter-spacing: .1em; text-transform: uppercase; }
         .splash-bar { width: 200px; height: 2px; background: var(--bg4); border-radius: 2px; overflow: hidden; }
-        .splash-fill { height: 100%; width: 40%; background: var(--green); border-radius: 2px; animation: loading 1.5s ease-in-out infinite; }
+        .splash-fill { height: 100%; width: 40%; background: var(--green); animation: loading 1.5s ease-in-out infinite; }
         @keyframes loading { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
         .app { min-height: 100vh; display: flex; flex-direction: column; }
         .header { background: var(--bg2); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; backdrop-filter: blur(20px); }
@@ -613,7 +800,7 @@ export function Dashboard() {
         .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; position: relative; overflow: hidden; transition: border-color .2s, transform .2s; }
         .stat-card:hover { border-color: var(--border2); transform: translateY(-1px); }
         .stat-icon { font-size: 18px; color: var(--accent, var(--indigo)); margin-bottom: 12px; display: block; }
-        .stat-value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; font-variant-numeric: tabular-nums; margin-bottom: 6px; }
+        .stat-value { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; font-variant-numeric: tabular-nums; margin-bottom: 6px; }
         .stat-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; }
         .stat-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
         .stat-glow { position: absolute; top: -20px; right: -20px; width: 80px; height: 80px; border-radius: 50%; background: var(--accent, var(--indigo)); opacity: .06; filter: blur(20px); pointer-events: none; }
@@ -642,7 +829,6 @@ export function Dashboard() {
         .action-btn.primary { background: var(--green); color: #0a1a12; }
         .action-btn.primary:hover:not(:disabled) { background: #5eead4; }
         .action-btn.primary.danger { background: var(--red); color: #1a0a0a; }
-        .action-btn.primary.danger:hover:not(:disabled) { background: #fca5a5; }
         .action-btn.primary.success { background: var(--green); color: #0a1a12; }
         .action-btn.secondary { background: var(--bg4); color: var(--text); border: 1px solid var(--border2); }
         .action-btn.secondary:hover:not(:disabled) { background: var(--bg3); }
@@ -693,10 +879,7 @@ export function Dashboard() {
         .icon-btn.del { background: #f8717115; color: var(--red); border: 1px solid #f8717130; }
         .icon-btn.del:hover { background: #f8717130; }
         .table-card { display: none; }
-        @media (min-width: 640px) {
-          .contact-cards { display: none; }
-          .table-card { display: block; }
-        }
+        @media (min-width: 640px) { .contact-cards { display: none; } .table-card { display: block !important; } }
         .table-wrap { overflow-x: auto; }
         .table { width: 100%; border-collapse: collapse; min-width: 600px; }
         .table thead tr { border-bottom: 1px solid var(--border); }
@@ -717,10 +900,7 @@ export function Dashboard() {
         .notif.success { background: #0f2a1e; border: 1px solid #34d39940; color: var(--green); }
         .notif.error { background: #2a0f0f; border: 1px solid #f8717140; color: var(--red); }
         .notif-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-        @media (min-width: 640px) {
-          .contact-cards { display: none; }
-          .table-card { display: block !important; }
-        }
+        input[type=range] { accent-color: var(--green); }
       `}</style>
     </div>
   )
