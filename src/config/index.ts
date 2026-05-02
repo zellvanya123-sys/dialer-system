@@ -1,26 +1,31 @@
 import dotenv from 'dotenv';
-
 dotenv.config();
 
 export const config = {
-  // ✅ FIX #6: port теперь number, не string
   port: parseInt(process.env.PORT || '3000'),
   host: process.env.HOST || '0.0.0.0',
   nodeEnv: process.env.NODE_ENV || 'development',
-
-  // ✅ Максимум параллельных звонков — теперь из .env
   maxConcurrentCalls: parseInt(process.env.MAX_CONCURRENT_CALLS || '3'),
 
   database: {
     path: process.env.DATABASE_PATH || './data/dialer.db',
   },
 
+  // ✅ МТС Exolve (новый провайдер)
+  exolve: {
+    apiKey: process.env.EXOLVE_API_KEY || '',
+    phoneNumber: process.env.EXOLVE_PHONE_NUMBER || '',
+    webhookSecret: process.env.EXOLVE_WEBHOOK_SECRET || '',
+  },
+
+  // Sipuni (старый провайдер — оставлен для совместимости)
   sipuni: {
     host: process.env.SIPUNI_HOST || 'voip.sipuni.ru',
     port: process.env.SIPUNI_PORT || '443',
     user: process.env.SIPUNI_USER,
     secret: process.env.SIPUNI_SECRET,
     sipNumber: process.env.SIPUNI_SIP_NUMBER,
+    webhookSecret: process.env.SIPUNI_WEBHOOK_SECRET || '',
   },
 
   openai: {
@@ -38,13 +43,6 @@ export const config = {
     voice: process.env.YANDEX_VOICE || 'oksana',
     format: 'mp3',
     lang: 'ru-RU',
-  },
-
-  mango: {
-    host: process.env.MANGO_HOST || 'gw1.mangosip.ru',
-    login: process.env.MANGO_LOGIN,
-    password: process.env.MANGO_PASSWORD,
-    sipNumber: process.env.MANGO_SIP_NUMBER,
   },
 
   telegram: {
@@ -66,14 +64,19 @@ export const config = {
   },
 
   aiVoice: {
-    systemPrompt: process.env.AI_SYSTEM_PROMPT || 'Ты вежливый менеджер по продажам. Ты звонишь клиенту с предложением услуги. Отвечай кратко и по делу. Не упоминай что ты AI.',
-    welcomeMessage: process.env.AI_WELCOME_MESSAGE || 'Здравствуйте! Это компания XYZ. У нас для вас есть интересное предложение. У вас есть минута?',
-    maxTurns: parseInt(process.env.AI_MAX_TURNS || '10'),
-    timeoutMs: parseInt(process.env.AI_TIMEOUT_MS || '30000'),
+    systemPrompt: process.env.AI_SYSTEM_PROMPT || 'Ты вежливый менеджер по продажам.',
+    welcomeMessage: process.env.AI_WELCOME_MESSAGE || 'Здравствуйте! У вас есть минута?',
+    maxTurns: parseInt(process.env.AI_MAX_TURNS || '12'),
+    timeoutMs: parseInt(process.env.AI_TIMEOUT_MS || '180000'),
   },
 
   proxy: {
     http: process.env.HTTP_PROXY,
     https: process.env.HTTPS_PROXY,
+  },
+
+  dashboard: {
+    login: process.env.DASHBOARD_LOGIN || 'admin',
+    password: process.env.DASHBOARD_PASSWORD || 'dialer123',
   },
 };
