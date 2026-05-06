@@ -1,107 +1,149 @@
 import axios, { AxiosInstance } from 'axios';
-import { Contact, CallResult, CallLog } from '../contacts/contact.model';
 import { ContactRepository } from '../contacts/contact.repository';
 import { formatPhoneForCall } from '../scheduler/timezone';
 import { config } from '../../config/index';
+import { CallResult, CallLog } from '../contacts/contact.model';
 import logger from '../../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
-export interface DialerConfig {
-  provider: 'exolve' | 'sipuni';
+// ═══════════════════════════════════════════
+// МТС Exolve VATS Dialer
+// API: https://exolve508698.vats.exolve.ru/crmapi/v1
+// Документация: https://vpbxdocs.exolve.ru/
+// ═══════════════════════════════════════════
+class VATSDialer {
+  private http: AxiosInstance;
+  private apiKey: string;
+  private fromNumber: string;
+  private baseUrl: string;
+
+  constructor() {
+    this.apiKey = config.vats.apiKey || '';
+    this.fromNumber = config.vats.phoneNumber || '';
+    this.baseUrl = config.vats.apiUrl || 'https://exolve508698.vats.exolve.ru/crmapi/v1';
+
+    if (!this.apiKey) throw new Error('VATS API key not configured (VATS_API_KEY)');
+    if (!this.fromNumber) throw new Error('VATS phone number not configured (VATS_PHONE_NUMBER)');
+
+    this.http = axios.create({
+      baseURL: this.baseUrl,
+      headers: {
+        'X-VATS-Authorization': this.apiKey,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    });
+
+    logger.info(`VATS Dialer initialized. From: ${this.fromNumber}`);
+  }
+
+  async makeCall(contactId: string): Promise<string> {
+    const contact = ContactRepository.findById(contactId);
+    if (!contact) throw new Error(`Contact not found: ${contactId}`);
+
+    const to = formatPhoneForCall(contact.phone);
+    logger.info(`Initiating call via VATS to ${to}`);
+
+    try {
+      // VATS makeCall API — исходящий звонок
+      // Документация: https://vpbxdocs.exolve.ru/management-api
+      const response = await this.http.post('/makeCall', {
+        from: this.fromNumber,
+        to: to,
+      });
+
+      const callId = response.data?.call_id
+        || response.data?.callId
+        || response.data?.id
+        || uuidv4();
+
+      logger.info(`VATS call initiated: callId=${callId} to=${to}`);
+      return String(callId);
+
+    } catch (error: any) {
+      const errMsg = error.response?.data?.message
+        || error.response?.data?.error
+        || error.message;
+      logger.error(`VATS API error: ${errMsg}`);
+      logger.error(`VATS response: ${JSON.stringify(error.response?.data)}`);
+      throw new Error(`VATS call failed: ${errMsg}`);
+    }
+  }
+
+  async hangupCall(callId: string): Promise<void> {
+    try {
+      await this.http.post('/hangup', { call_id: callId });
+      logger.info(`VATS call hung up: ${callId}`);
+    } catch (error: any) {
+      logger.error(`VATS hangupCall error: ${error.message}`);
+    }
+  }
+
+  // Тест подключения
+  async testConnection(): Promise<boolean> {
+    try {
+      await this.http.get('/accounts');
+      logger.info('VATS connection test: OK');
+      return true;
+    } catch (error: any) {
+      logger.warn(`VATS connection test failed: ${error.message}`);
+      return false;
+    }
+  }
 }
 
 // ═══════════════════════════════════════════
-// МТС Exolve Dialer
-// Документация: https://exolve.ru/docs/
+// Exolve API Dialer (dev.exolve.ru)
 // ═══════════════════════════════════════════
 class ExolveDialer {
   private http: AxiosInstance;
   private apiKey: string;
   private fromNumber: string;
-  private baseUrl = 'https://api.exolve.ru';
 
   constructor() {
     this.apiKey = config.exolve.apiKey || '';
     this.fromNumber = config.exolve.phoneNumber || '';
 
-    if (!this.apiKey) {
-      throw new Error('Exolve API key not configured (EXOLVE_API_KEY)');
-    }
-    if (!this.fromNumber) {
-      throw new Error('Exolve phone number not configured (EXOLVE_PHONE_NUMBER)');
-    }
+    if (!this.apiKey) throw new Error('Exolve API key not configured (EXOLVE_API_KEY)');
 
     this.http = axios.create({
-      baseURL: this.baseUrl,
+      baseURL: 'https://api.exolve.ru',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
       },
       timeout: 15000,
     });
-
-    logger.info(`Exolve dialer initialized. From: ${this.fromNumber}`);
   }
 
   async makeCall(contactId: string): Promise<string> {
     const contact = ContactRepository.findById(contactId);
-    if (!contact) {
-      throw new Error(`Contact not found: ${contactId}`);
-    }
+    if (!contact) throw new Error(`Contact not found: ${contactId}`);
 
     const to = formatPhoneForCall(contact.phone);
-    logger.info(`Initiating call via Exolve to ${to}`);
 
     try {
-      // МТС Exolve API: инициировать исходящий звонок
-      // Документация: https://exolve.ru/docs/voice/MakeCall/
       const response = await this.http.post('/voice/v1/MakeCall', {
-        number: to,           // Номер клиента
-        from_number: this.fromNumber, // Наш виртуальный номер
+        number: to,
+        from_number: this.fromNumber,
       });
 
       const callId = response.data?.call_id || response.data?.CallId || uuidv4();
-      logger.info(`Exolve call initiated: callId=${callId} to=${to}`);
-      return callId;
-
+      logger.info(`Exolve call initiated: callId=${callId}`);
+      return String(callId);
     } catch (error: any) {
-      const errMsg = error.response?.data?.message || error.message;
-      logger.error(`Exolve API error: ${errMsg}`);
-      throw new Error(`Exolve call failed: ${errMsg}`);
-    }
-  }
-
-  // Получить статус звонка
-  async getCallStatus(callId: string): Promise<any> {
-    try {
-      const response = await this.http.post('/voice/v1/GetCallHistory', {
-        call_id: callId,
-      });
-      return response.data;
-    } catch (error: any) {
-      logger.error(`Exolve getCallStatus error: ${error.message}`);
-      return null;
-    }
-  }
-
-  // Завершить активный звонок
-  async hangupCall(callId: string): Promise<void> {
-    try {
-      await this.http.post('/voice/v1/HangupCall', { call_id: callId });
-      logger.info(`Exolve call hung up: ${callId}`);
-    } catch (error: any) {
-      logger.error(`Exolve hangupCall error: ${error.message}`);
+      logger.error(`Exolve API error: ${error.message}`);
+      throw error;
     }
   }
 }
 
 // ═══════════════════════════════════════════
-// Sipuni Dialer (оставлен для совместимости)
+// Sipuni Dialer (fallback)
 // ═══════════════════════════════════════════
 import crypto from 'crypto';
 
 class SipuniDialer {
-  private http: AxiosInstance;
   private user: string;
   private secret: string;
   private sipNumber: string;
@@ -114,12 +156,6 @@ class SipuniDialer {
     this.sipNumber = config.sipuni.sipNumber || '';
     this.host = config.sipuni.host || 'voip.sipuni.ru';
     this.port = config.sipuni.port || '443';
-
-    if (!this.user || !this.secret || !this.sipNumber) {
-      throw new Error('Sipuni credentials not configured');
-    }
-
-    this.http = axios.create();
   }
 
   private generateHash(params: Record<string, string>): string {
@@ -132,47 +168,42 @@ class SipuniDialer {
     const contact = ContactRepository.findById(contactId);
     if (!contact) throw new Error(`Contact not found: ${contactId}`);
 
-    const to = formatPhoneForCall(contact.phone);
+    const to = formatPhoneForCall(contact.phone).replace('+', '');
     const params: Record<string, string> = {
-      antiaon: '0',
-      phone: to.replace('+', ''),
-      reverse: '0',
-      sipnumber: this.sipNumber,
-      user: this.user,
+      antiaon: '0', phone: to, reverse: '0',
+      sipnumber: this.sipNumber, user: this.user,
     };
     const hash = this.generateHash(params);
 
-    try {
-      const protocol = this.port === '443' ? 'https' : 'http';
-      const response = await this.http.post(
-        `${protocol}://${this.host}:${this.port}/api/callback/call_number`,
-        new URLSearchParams({ ...params, hash }).toString(),
-        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-      );
-      const callId = response.data?.order_id || response.data?.call_id || uuidv4();
-      logger.info(`Sipuni call initiated: ${callId}`);
-      return callId;
-    } catch (error: any) {
-      logger.error(`Sipuni API error: ${error.message}`);
-      throw error;
-    }
+    const protocol = this.port === '443' ? 'https' : 'http';
+    const response = await axios.post(
+      `${protocol}://${this.host}:${this.port}/api/callback/call_number`,
+      new URLSearchParams({ ...params, hash }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+
+    return response.data?.order_id || response.data?.call_id || uuidv4();
   }
 }
 
 // ═══════════════════════════════════════════
-// Фабрика — выбираем провайдера из .env
+// Фабрика — автовыбор провайдера
 // ═══════════════════════════════════════════
-type AnyDialer = ExolveDialer | SipuniDialer;
+type AnyDialer = VATSDialer | ExolveDialer | SipuniDialer;
 let dialer: AnyDialer;
 
-export function initDialer(provider?: 'exolve' | 'sipuni'): AnyDialer {
-  // Автоопределение провайдера по наличию ключей в .env
-  const resolvedProvider = provider
-    || (config.exolve.apiKey ? 'exolve' : 'sipuni');
+export function initDialer(provider?: string): AnyDialer {
+  const resolved = provider
+    || (config.vats.apiKey ? 'vats' : null)
+    || (config.exolve.apiKey ? 'exolve' : null)
+    || 'sipuni';
 
-  if (resolvedProvider === 'exolve') {
+  if (resolved === 'vats') {
+    dialer = new VATSDialer();
+    logger.info('✓ Dialer: МТС VATS (300 номеров)');
+  } else if (resolved === 'exolve') {
     dialer = new ExolveDialer();
-    logger.info('✓ Dialer: МТС Exolve');
+    logger.info('✓ Dialer: МТС Exolve API');
   } else {
     dialer = new SipuniDialer();
     logger.info('✓ Dialer: Sipuni');
@@ -182,11 +213,10 @@ export function initDialer(provider?: 'exolve' | 'sipuni'): AnyDialer {
 }
 
 export function getDialer(): AnyDialer {
-  if (!dialer) throw new Error('Dialer not initialized. Call initDialer() first.');
+  if (!dialer) throw new Error('Dialer not initialized');
   return dialer;
 }
 
-// Сохранить лог звонка в БД
 export async function createCallLog(
   contactId: string,
   result: CallResult,

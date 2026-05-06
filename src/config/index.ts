@@ -8,17 +8,25 @@ export const config = {
   maxConcurrentCalls: parseInt(process.env.MAX_CONCURRENT_CALLS || '3'),
 
   database: {
-    path: process.env.DATABASE_PATH || './data/dialer.db',
+    path: process.env.DATABASE_PATH || './data/dialer.sqlite',
   },
 
-  // ✅ МТС Exolve (новый провайдер)
+  // ✅ МТС Exolve VATS (основной провайдер)
+  vats: {
+    apiKey: process.env.VATS_API_KEY || '',
+    phoneNumber: process.env.VATS_PHONE_NUMBER || '',
+    apiUrl: process.env.VATS_API_URL || 'https://exolve508698.vats.exolve.ru/crmapi/v1',
+    webhookSecret: process.env.VATS_WEBHOOK_SECRET || 'vats_secret_2026',
+  },
+
+  // МТС Exolve dev API (запасной)
   exolve: {
     apiKey: process.env.EXOLVE_API_KEY || '',
     phoneNumber: process.env.EXOLVE_PHONE_NUMBER || '',
     webhookSecret: process.env.EXOLVE_WEBHOOK_SECRET || '',
   },
 
-  // Sipuni (старый провайдер — оставлен для совместимости)
+  // Sipuni (запасной)
   sipuni: {
     host: process.env.SIPUNI_HOST || 'voip.sipuni.ru',
     port: process.env.SIPUNI_PORT || '443',
@@ -50,13 +58,6 @@ export const config = {
     adminChatId: process.env.TELEGRAM_ADMIN_CHAT_ID,
   },
 
-  googleSheets: {
-    clientId: process.env.GOOGLE_SHEETS_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_SHEETS_CLIENT_SECRET,
-    refreshToken: process.env.GOOGLE_SHEETS_REFRESH_TOKEN,
-    spreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
-  },
-
   callSettings: {
     minHour: parseInt(process.env.CALL_MIN_HOUR || '9'),
     maxHour: parseInt(process.env.CALL_MAX_HOUR || '20'),
@@ -68,11 +69,6 @@ export const config = {
     welcomeMessage: process.env.AI_WELCOME_MESSAGE || 'Здравствуйте! У вас есть минута?',
     maxTurns: parseInt(process.env.AI_MAX_TURNS || '12'),
     timeoutMs: parseInt(process.env.AI_TIMEOUT_MS || '180000'),
-  },
-
-  proxy: {
-    http: process.env.HTTP_PROXY,
-    https: process.env.HTTPS_PROXY,
   },
 
   dashboard: {
